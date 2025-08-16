@@ -18,6 +18,55 @@ export class AgentService {
   async getAgents(): Promise<Agent[]> {
     // Mock agents based on what we have running
     return [
+      // User Agents (new)
+      {
+        id: 'kartik',
+        name: 'Kartik',
+        type: 'user_agent',
+        description: 'Visionary Builder - focuses on infrastructure and utility',
+        isOnline: true,
+        address: 'agent1q...',
+        port: 8200,
+        capabilities: ['infrastructure', 'utility', 'smart-contracts', 'DAOs'],
+        personality: 'Visionary Builder',
+        emoji: '🔨'
+      },
+      {
+        id: 'vitalik',
+        name: 'Vitalik',
+        type: 'user_agent',
+        description: 'Philosophical Analyst - game theory and mechanism design',
+        isOnline: true,
+        address: 'agent1q...',
+        port: 8201,
+        capabilities: ['game-theory', 'tokenomics', 'mechanism-design', 'mathematics'],
+        personality: 'Philosophical Analyst',
+        emoji: '🧮'
+      },
+      {
+        id: 'mik',
+        name: 'Mik',
+        type: 'user_agent',
+        description: 'Street-Smart Trader - momentum and profit focused',
+        isOnline: true,
+        address: 'agent1q...',
+        port: 8202,
+        capabilities: ['trading', 'momentum', 'whale-watching', 'arbitrage'],
+        personality: 'Street-Smart Trader',
+        emoji: '💰'
+      },
+      {
+        id: 'central_hub',
+        name: 'Central Hub',
+        type: 'hub',
+        description: 'Message broadcaster and aggregator',
+        isOnline: true,
+        address: 'agent1q...',
+        port: 8199,
+        capabilities: ['broadcasting', 'aggregation', 'session-management'],
+        emoji: '🌐'
+      },
+      // Existing agents
       {
         id: 'vending_machine',
         name: 'AI Vending Machine',

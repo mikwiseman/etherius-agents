@@ -1,46 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Agent } from '../types';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import EtheriusWorldService, { WorldAgent } from '../services/EtheriusWorldService';
+import { spriteManager } from '../assets/sprites';
 import './EtheriusWorld.css';
 
 interface Props {
-  agents: Agent[];
-  selectedAgent: Agent | null;
-  onAgentClick: (agent: Agent) => void;
+  onQuerySubmit?: (query: string) => void;
 }
 
-interface AgentSprite {
-  agent: Agent;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  targetX: number;
-  targetY: number;
-  message: string | null;
-  messageTimer: number;
-  color: string;
-  emoji: string;
-}
 
-const AGENT_EMOJIS: { [key: string]: string } = {
-  vending_machine: '🎰',
-  nft_vending: '🖼️',
-  nft_analyzer: '📊',
-  memecoin_generator: '🪙',
-  orchestrator: '🎯',
-  etherius_mother: '🌟'
-};
-
-const AGENT_COLORS: { [key: string]: string } = {
-  vending_machine: '#FF6B6B',
-  nft_vending: '#4ECDC4',
-  nft_analyzer: '#45B7D1',
-  memecoin_generator: '#F9CA24',
-  orchestrator: '#A55EEA',
-  etherius_mother: '#FFD93D'
-};
-
-const EtheriusWorld: React.FC<Props> = ({ agents, selectedAgent, onAgentClick }) => {
+const EtheriusWorld: React.FC<Props> = ({ onQuerySubmit }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [agentSprites, setAgentSprites] = useState<AgentSprite[]>([]);
   const animationRef = useRef<number>();
