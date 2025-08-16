@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etherius NYC Realm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0a0a;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* NYC Realm Scene */
+        .realm-container {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(to bottom, #1a0033 0%, #2d1b69 100%);
+            overflow: hidden;
+        }
+
+        #realmCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Speech Bubbles */
+        .speech-bubble {
+            position: absolute;
+            background: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            max-width: 200px;
+            font-size: 14px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .speech-bubble.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .speech-bubble.bot {
+            background: #ffffff;
+            color: #333;
+            border: 2px solid #667eea;
+        }
+
+        .speech-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid white;
+        }
+
+        .speech-bubble.user:after {
+            border-top-color: #764ba2;
+        }
+
+        .speech-bubble.bot:after {
+            left: auto;
+            right: 20px;
+            border-top-color: #667eea;
+        }
+
+        .speech-bubble.show {
+            opacity: 1;
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            height: 40%;
+            background: rgba(20, 20, 30, 0.95);
+            border-top: 2px solid #667eea;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: rgba(10, 10, 15, 0.7);
+        }
+
+        .message {
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.bot {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.bot .message-content {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid #667eea;
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            background: rgba(30, 30, 40, 0.9);
+            border-top: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.5);
+            border-radius: 20px;
+            font-size: 14px;
+            color: white;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .send-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading indicator */
+        .typing-indicator {
+            display: none;
+            color: #667eea;
+            font-style: italic;
+            padding: 10px;
+        }
+
+        .typing-indicator.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- NYC Realm Scene -->
+    <div class="realm-container">
+        <canvas id="realmCanvas"></canvas>
+    </div>
+
+    <!-- Chat Interface -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🌃 Etherius NFT Vending Machine</h1>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    Welcome to the NYC Realm! I'm Etherius, your NFT intelligence vending machine. Ask me about collections, tokens, or NFT trends!
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            Etherius is thinking...
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <input 
+                    type="text" 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Ask about NFTs, collections, or tokens..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // NYC Realm Scene Script
+        const canvas = document.getElementById('realmCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Scene configuration
+        let sceneWidth, sceneHeight;
+        let character = {
+            x: 300,
+            y: 0,
+            targetX: 300,
+            targetY: 0,
+            speed: 2,
+            state: 'idle', // idle, walking, talking
+            direction: 1
+        };
+        
+        let vendingMachine = {
+            x: 500,
+            y: 0,
+            width: 80,
+            height: 120,
+            glowing: false,
+            glowIntensity: 0
+        };
+
+        let npcs = [
+            { x: 100, y: 0, speed: 0.5, direction: 1 },
+            { x: 700, y: 0, speed: 0.3, direction: -1 }
+        ];
+
+        let speechBubbles = [];
+        let stars = [];
+        
+        // Initialize canvas
+        function initCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            sceneWidth = canvas.width;
+            sceneHeight = canvas.height;
+            
+            // Set ground level
+            const groundLevel = sceneHeight * 0.7;
+            character.y = groundLevel;
+            character.targetY = groundLevel;
+            vendingMachine.y = groundLevel - vendingMachine.height + 20;
+            npcs.forEach(npc => npc.y = groundLevel);
+            
+            // Generate stars
+            stars = [];
+            for (let i = 0; i < 50; i++) {
+                stars.push({
+                    x: Math.random() * sceneWidth,
+                    y: Math.random() * (sceneHeight * 0.5),
+                    size: Math.random() * 2
+                });
+            }
+        }
+
+        // Draw NYC background
+        function drawBackground() {
+            // Night sky gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, sceneHeight);
+            gradient.addColorStop(0, '#0a0015');
+            gradient.addColorStop(0.5, '#1a0033');
+            gradient.addColorStop(1, '#2d1b69');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, sceneWidth, sceneHeight);
+            
+            // Stars
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Buildings background
+            const buildingColors = ['#1a1a2e', '#16213e', '#0f3460'];
+            const buildingHeights = [200, 250, 180, 220, 190, 240, 210];
+            let xPos = 0;
+            
+            buildingHeights.forEach((height, i) => {
+                const width = sceneWidth / buildingHeights.length;
+                ctx.fillStyle = buildingColors[i % buildingColors.length];
+                ctx.fillRect(xPos, sceneHeight * 0.7 - height, width, height);
+                
+                // Windows
+                ctx.fillStyle = Math.random() > 0.3 ? '#ffeb3b' : '#333';
+                for (let wy = 0; wy < height - 20; wy += 30) {
+                    for (let wx = 10; wx < width - 10; wx += 20) {
+                        if (Math.random() > 0.3) {
+                            ctx.fillRect(xPos + wx, sceneHeight * 0.7 - height + wy + 10, 12, 15);
+                        }
+                    }
+                }
+                xPos += width;
+            });
+            
+            // Street
+            ctx.fillStyle = '#2a2a3a';
+            ctx.fillRect(0, sceneHeight * 0.7, sceneWidth, sceneHeight * 0.3);
+            
+            // Sidewalk
+            ctx.fillStyle = '#3a3a4a';
+            ctx.fillRect(0, sceneHeight * 0.7, sceneWidth, 10);
+        }
+
+        // Draw vending machine
+        function drawVendingMachine() {
+            const { x, y, width, height, glowing, glowIntensity } = vendingMachine;
+            
+            // Glow effect
+            if (glowing) {
+                ctx.shadowBlur = 20 + glowIntensity * 10;
+                ctx.shadowColor = '#667eea';
+            }
+            
+            // Machine body
+            const gradient = ctx.createLinearGradient(x, y, x + width, y + height);
+            gradient.addColorStop(0, '#4a4a6a');
+            gradient.addColorStop(0.5, '#5a5a7a');
+            gradient.addColorStop(1, '#3a3a5a');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, y, width, height);
+            
+            // Screen
+            ctx.fillStyle = glowing ? '#667eea' : '#2a2a4a';
+            ctx.fillRect(x + 10, y + 10, width - 20, height * 0.4);
+            
+            // "ETHERIUS" text
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('ETHERIUS', x + width/2, y + 35);
+            
+            // NFT display
+            ctx.font = '10px monospace';
+            ctx.fillStyle = '#9fa8da';
+            ctx.fillText('NFT ORACLE', x + width/2, y + 50);
+            
+            // Buttons
+            const buttonColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'];
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = buttonColors[i];
+                ctx.fillRect(x + 15 + (i * 15), y + 70, 10, 10);
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw character
+        function drawCharacter() {
+            const { x, y, state } = character;
+            
+            // Simple character representation
+            ctx.fillStyle = '#ffd93d';
+            ctx.beginPath();
+            ctx.arc(x, y - 35, 15, 0, Math.PI * 2); // Head
+            ctx.fill();
+            
+            // Body
+            ctx.fillStyle = '#6c5ce7';
+            ctx.fillRect(x - 10, y - 20, 20, 30);
+            
+            // Legs
+            ctx.fillStyle = '#2d3436';
+            ctx.fillRect(x - 8, y + 10, 7, 15);
+            ctx.fillRect(x + 1, y + 10, 7, 15);
+            
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x - 5, y - 35, 2, 0, Math.PI * 2);
+            ctx.arc(x + 5, y - 35, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw NPCs
+        function drawNPCs() {
+            npcs.forEach(npc => {
+                // Simple NPC representation
+                ctx.fillStyle = '#95a5a6';
+                ctx.beginPath();
+                ctx.arc(npc.x, npc.y - 30, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillRect(npc.x - 8, npc.y - 18, 16, 25);
+                
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(npc.x - 6, npc.y + 7, 5, 12);
+                ctx.fillRect(npc.x + 1, npc.y + 7, 5, 12);
+            });
+        }
+
+        // Update character position
+        function updateCharacter() {
+            const dx = character.targetX - character.x;
+            const dy = character.targetY - character.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 2) {
+                character.x += (dx / distance) * character.speed;
+                character.y += (dy / distance) * character.speed;
+                character.state = 'walking';
+            } else {
+                character.state = character.state === 'talking' ? 'talking' : 'idle';
+            }
+            
+            // Random idle movement
+            if (character.state === 'idle' && Math.random() < 0.01) {
+                character.targetX = 100 + Math.random() * (sceneWidth - 200);
+            }
+        }
+
+        // Update NPCs
+        function updateNPCs() {
+            npcs.forEach(npc => {
+                npc.x += npc.speed * npc.direction;
+                
+                if (npc.x < 50 || npc.x > sceneWidth - 50) {
+                    npc.direction *= -1;
+                }
+            });
+        }
+
+        // Add speech bubble
+        function addSpeechBubble(text, isUser) {
+            const bubble = {
+                text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+                x: isUser ? character.x : vendingMachine.x + vendingMachine.width / 2,
+                y: isUser ? character.y - 60 : vendingMachine.y - 20,
+                opacity: 1,
+                age: 0,
+                isUser: isUser
+            };
+            
+            speechBubbles.push(bubble);
+            
+            // Keep only last 3 bubbles
+            if (speechBubbles.length > 3) {
+                speechBubbles.shift();
+            }
+        }
+
+        // Draw speech bubbles
+        function drawSpeechBubbles() {
+            speechBubbles.forEach((bubble, index) => {
+                if (bubble.opacity > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = bubble.opacity;
+                    
+                    // Bubble background
+                    ctx.fillStyle = bubble.isUser ? '#667eea' : '#ffffff';
+                    const textWidth = ctx.measureText(bubble.text).width;
+                    const bubbleWidth = Math.min(textWidth + 20, 200);
+                    const bubbleHeight = 30;
+                    
+                    // Draw rounded rectangle
+                    ctx.beginPath();
+                    ctx.roundRect(
+                        bubble.x - bubbleWidth/2,
+                        bubble.y - bubbleHeight/2,
+                        bubbleWidth,
+                        bubbleHeight,
+                        10
+                    );
+                    ctx.fill();
+                    
+                    // Bubble tail
+                    ctx.beginPath();
+                    ctx.moveTo(bubble.x - 5, bubble.y + bubbleHeight/2);
+                    ctx.lineTo(bubble.x + 5, bubble.y + bubbleHeight/2);
+                    ctx.lineTo(bubble.x, bubble.y + bubbleHeight/2 + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Text
+                    ctx.fillStyle = bubble.isUser ? '#ffffff' : '#333333';
+                    ctx.font = '12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(bubble.text, bubble.x, bubble.y);
+                    
+                    ctx.restore();
+                }
+            });
+        }
+
+        // Update speech bubbles
+        function updateSpeechBubbles() {
+            speechBubbles.forEach(bubble => {
+                bubble.age++;
+                if (bubble.age > 180) { // Fade after 3 seconds at 60fps
+                    bubble.opacity = Math.max(0, bubble.opacity - 0.02);
+                }
+            });
+            
+            // Remove fully faded bubbles
+            speechBubbles = speechBubbles.filter(b => b.opacity > 0);
+        }
+
+        // Animation loop
+        function animate() {
+            // Clear canvas
+            ctx.clearRect(0, 0, sceneWidth, sceneHeight);
+            
+            // Draw scene
+            drawBackground();
+            drawVendingMachine();
+            drawNPCs();
+            drawCharacter();
+            drawSpeechBubbles();
+            
+            // Update
+            updateCharacter();
+            updateNPCs();
+            updateSpeechBubbles();
+            
+            // Update vending machine glow
+            if (vendingMachine.glowing) {
+                vendingMachine.glowIntensity = Math.sin(Date.now() * 0.005) * 0.5 + 0.5;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Chat functionality
+        const ETHERIUS_URL = 'http://localhost:8100/chat';
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                sendMessage();
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Convert markdown-style formatting to HTML
+            let formattedContent = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+            
+            contentDiv.innerHTML = formattedContent;
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Add speech bubble in scene
+            addSpeechBubble(content, isUser);
+            
+            // Move character to vending machine when talking
+            if (isUser) {
+                character.targetX = vendingMachine.x - 100;
+                character.state = 'talking';
+            } else {
+                vendingMachine.glowing = true;
+                setTimeout(() => {
+                    vendingMachine.glowing = false;
+                }, 2000);
+            }
+        }
+
+        function showTyping() {
+            document.getElementById('typingIndicator').classList.add('show');
+            vendingMachine.glowing = true;
+        }
+
+        function hideTyping() {
+            document.getElementById('typingIndicator').classList.remove('show');
+            vendingMachine.glowing = false;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message
+            addMessage(message, true);
+            
+            // Clear input and disable while processing
+            input.value = '';
+            input.disabled = true;
+            sendButton.disabled = true;
+            
+            // Show typing indicator
+            showTyping();
+            
+            try {
+                const response = await fetch(ETHERIUS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Hide typing and add bot response
+                hideTyping();
+                addMessage(data.response || 'Sorry, I couldn\'t process that request.');
+                
+            } catch (error) {
+                hideTyping();
+                console.error('Error:', error);
+                
+                if (error.message.includes('Failed to fetch')) {
+                    addMessage('⚠️ Cannot connect to the Etherius agent. Please make sure it\'s running.', false);
+                } else {
+                    addMessage('Sorry, something went wrong. Please try again.', false);
+                }
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendButton.disabled = false;
+                input.focus();
+                
+                // Character returns to idle after conversation
+                setTimeout(() => {
+                    character.state = 'idle';
+                }, 3000);
+            }
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            initCanvas();
+            animate();
+            document.getElementById('chatInput').focus();
+        };
+
+        // Handle window resize
+        window.addEventListener('resize', initCanvas);
+    </script>
+</body>
+</html>

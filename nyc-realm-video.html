@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etherius NYC Realm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0a0a;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* NYC Realm Scene */
+        .realm-container {
+            flex: 1;
+            position: relative;
+            background: #0a0015;
+            overflow: hidden;
+        }
+
+        /* Video Background */
+        .video-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .video-strip {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .video-strip video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Canvas for sprites */
+        #realmCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+
+
+        /* Speech Bubbles */
+        .speech-bubble {
+            position: absolute;
+            background: white;
+            border-radius: 15px;
+            padding: 10px 15px;
+            max-width: 200px;
+            font-size: 14px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+
+        .speech-bubble.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .speech-bubble.bot {
+            background: #ffffff;
+            color: #333;
+            border: 2px solid #667eea;
+        }
+
+        .speech-bubble:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 20px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid white;
+        }
+
+        .speech-bubble.user:after {
+            border-top-color: #764ba2;
+        }
+
+        .speech-bubble.bot:after {
+            left: auto;
+            right: 20px;
+            border-top-color: #667eea;
+        }
+
+        .speech-bubble.show {
+            opacity: 1;
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            height: 40%;
+            background: rgba(20, 20, 30, 0.95);
+            border-top: 2px solid #667eea;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: rgba(10, 10, 15, 0.7);
+        }
+
+        .message {
+            margin-bottom: 12px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.bot {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            padding: 10px 14px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.bot .message-content {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid #667eea;
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            background: rgba(30, 30, 40, 0.9);
+            border-top: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.5);
+            border-radius: 20px;
+            font-size: 14px;
+            color: white;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .send-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .send-button:hover {
+            transform: scale(1.05);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading indicator */
+        .typing-indicator {
+            display: none;
+            color: #667eea;
+            font-style: italic;
+            padding: 10px;
+        }
+
+        .typing-indicator.show {
+            display: block;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- NYC Realm Scene -->
+    <div class="realm-container">
+        <!-- Video Background -->
+        <div class="video-background" id="videoBackground">
+            <div class="video-strip" id="videoStrip">
+                <!-- Single static video -->
+                <video autoplay loop muted playsinline>
+                    <source src="1.mp4" type="video/mp4">
+                </video>
+            </div>
+        </div>
+        
+        <!-- Canvas for sprites -->
+        <canvas id="realmCanvas"></canvas>
+    </div>
+
+    <!-- Chat Interface -->
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🌃 Etherius NFT Vending Machine</h1>
+        </div>
+        
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    Welcome to the NYC Realm! I'm Etherius, your NFT intelligence vending machine. Upload a video background and ask me about collections, tokens, or NFT trends!
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            Etherius is thinking...
+        </div>
+
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <input 
+                    type="text" 
+                    class="chat-input" 
+                    id="chatInput" 
+                    placeholder="Ask about NFTs, collections, or tokens..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // NYC Realm Scene Script
+        const canvas = document.getElementById('realmCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Scene configuration
+        let sceneWidth, sceneHeight;
+        let groundLevel;
+        let videoWidth, videoHeight;
+        let videoOffsetX = 0;
+        
+        let character = {
+            x: 300,
+            y: 0,
+            targetX: 300,
+            targetY: 0,
+            speed: 2,
+            state: 'idle', // idle, walking, talking
+            direction: 1,
+            width: 30,
+            height: 50
+        };
+        
+        let vendingMachine = {
+            x: 500,
+            y: 0,
+            width: 80,
+            height: 120,
+            glowing: false,
+            glowIntensity: 0
+        };
+
+        let npcs = [
+            { x: 100, y: 0, speed: 0.5, direction: 1, width: 25, height: 45 },
+            { x: 700, y: 0, speed: 0.3, direction: -1, width: 25, height: 45 }
+        ];
+
+        let speechBubbles = [];
+        
+        // Initialize canvas
+        function initCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            sceneWidth = canvas.width;
+            sceneHeight = canvas.height;
+            
+            // Calculate video dimensions based on aspect ratio with object-fit: contain
+            const video = document.querySelector('.video-strip video');
+            if (video && video.videoWidth && video.videoHeight) {
+                const videoAspect = video.videoWidth / video.videoHeight;
+                const canvasAspect = sceneWidth / sceneHeight;
+                
+                if (videoAspect > canvasAspect) {
+                    // Video is wider - letterboxed top/bottom
+                    videoWidth = sceneWidth;
+                    videoHeight = videoWidth / videoAspect;
+                    videoOffsetX = 0;
+                } else {
+                    // Video is taller - letterboxed left/right
+                    videoHeight = sceneHeight;
+                    videoWidth = videoHeight * videoAspect;
+                    videoOffsetX = (sceneWidth - videoWidth) / 2;
+                }
+            } else {
+                // Fallback if video not loaded yet - assume 16:9 aspect ratio
+                const videoAspect = 16 / 9;
+                const canvasAspect = sceneWidth / sceneHeight;
+                
+                if (videoAspect > canvasAspect) {
+                    videoWidth = sceneWidth;
+                    videoHeight = videoWidth / videoAspect;
+                    videoOffsetX = 0;
+                } else {
+                    videoHeight = sceneHeight;
+                    videoWidth = videoHeight * videoAspect;
+                    videoOffsetX = (sceneWidth - videoWidth) / 2;
+                }
+            }
+            
+            // Set ground level (bottom of the video area)
+            groundLevel = sceneHeight - 50;
+            
+            // Position character within video bounds
+            const centerX = videoOffsetX + videoWidth / 2;
+            character.x = centerX - 150;
+            character.y = groundLevel;
+            character.targetY = groundLevel;
+            character.targetX = character.x;
+            
+            // Position vending machine within video bounds
+            vendingMachine.x = centerX + 50;
+            vendingMachine.y = groundLevel - vendingMachine.height;
+            
+            // Position NPCs within video bounds
+            npcs[0].x = videoOffsetX + videoWidth * 0.2;
+            npcs[1].x = videoOffsetX + videoWidth * 0.8;
+            npcs.forEach(npc => npc.y = groundLevel);
+        }
+
+        // Draw simple ground line
+        function drawGround() {
+            // Only draw ground line within video bounds
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(videoOffsetX, groundLevel + character.height/2);
+            ctx.lineTo(videoOffsetX + videoWidth, groundLevel + character.height/2);
+            ctx.stroke();
+            
+            // Optional: Draw video boundary indicators for debugging
+            // ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+            // ctx.strokeRect(videoOffsetX, 0, videoWidth, sceneHeight);
+        }
+
+        // Draw vending machine
+        function drawVendingMachine() {
+            const { x, y, width, height, glowing, glowIntensity } = vendingMachine;
+            
+            // Glow effect
+            if (glowing) {
+                ctx.shadowBlur = 20 + glowIntensity * 10;
+                ctx.shadowColor = '#667eea';
+            }
+            
+            // Machine body with transparency to see video behind
+            ctx.fillStyle = 'rgba(74, 74, 106, 0.8)';
+            ctx.fillRect(x, y, width, height);
+            
+            // Screen
+            ctx.fillStyle = glowing ? 'rgba(102, 126, 234, 0.9)' : 'rgba(42, 42, 74, 0.9)';
+            ctx.fillRect(x + 10, y + 10, width - 20, height * 0.4);
+            
+            // "ETHERIUS" text
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('ETHERIUS', x + width/2, y + 35);
+            
+            // NFT display
+            ctx.font = '10px monospace';
+            ctx.fillStyle = '#9fa8da';
+            ctx.fillText('NFT ORACLE', x + width/2, y + 50);
+            
+            // Buttons
+            const buttonColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'];
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = buttonColors[i];
+                ctx.fillRect(x + 15 + (i * 15), y + 70, 10, 10);
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw character sprite
+        function drawCharacter() {
+            const { x, y, width, height, state } = character;
+            
+            // Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.ellipse(x, y + height/2, width/2, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Simple character with semi-transparency
+            ctx.fillStyle = 'rgba(255, 217, 61, 0.9)';
+            ctx.beginPath();
+            ctx.arc(x, y - height + 15, 15, 0, Math.PI * 2); // Head
+            ctx.fill();
+            
+            // Body
+            ctx.fillStyle = 'rgba(108, 92, 231, 0.9)';
+            ctx.fillRect(x - width/2, y - height + 30, width, height - 20);
+            
+            // Legs
+            ctx.fillStyle = 'rgba(45, 52, 54, 0.9)';
+            ctx.fillRect(x - width/2 + 2, y + 10, width/2 - 2, 15);
+            ctx.fillRect(x + 1, y + 10, width/2 - 2, 15);
+            
+            // Eyes
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x - 5, y - height + 15, 2, 0, Math.PI * 2);
+            ctx.arc(x + 5, y - height + 15, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw NPCs
+        function drawNPCs() {
+            npcs.forEach(npc => {
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.ellipse(npc.x, npc.y + npc.height/2, npc.width/2, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Simple NPC with transparency
+                ctx.fillStyle = 'rgba(149, 165, 166, 0.8)';
+                ctx.beginPath();
+                ctx.arc(npc.x, npc.y - npc.height + 12, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillRect(npc.x - npc.width/2, npc.y - npc.height + 24, npc.width, npc.height - 15);
+                
+                ctx.fillStyle = 'rgba(52, 73, 94, 0.8)';
+                ctx.fillRect(npc.x - npc.width/2 + 2, npc.y + 7, npc.width/2 - 2, 12);
+                ctx.fillRect(npc.x + 1, npc.y + 7, npc.width/2 - 2, 12);
+            });
+        }
+
+        // Update character position
+        function updateCharacter() {
+            const dx = character.targetX - character.x;
+            const dy = character.targetY - character.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 2) {
+                character.x += (dx / distance) * character.speed;
+                character.y += (dy / distance) * character.speed;
+                character.state = 'walking';
+            } else {
+                character.state = character.state === 'talking' ? 'talking' : 'idle';
+            }
+            
+            // Random idle movement within video bounds
+            if (character.state === 'idle' && Math.random() < 0.01) {
+                const minX = videoOffsetX + 50;
+                const maxX = videoOffsetX + videoWidth - 50;
+                character.targetX = minX + Math.random() * (maxX - minX);
+            }
+            
+            // Keep character within video bounds
+            const minBound = videoOffsetX + 50;
+            const maxBound = videoOffsetX + videoWidth - 50;
+            character.x = Math.max(minBound, Math.min(maxBound, character.x));
+            character.targetX = Math.max(minBound, Math.min(maxBound, character.targetX));
+        }
+
+        // Update NPCs
+        function updateNPCs() {
+            npcs.forEach(npc => {
+                npc.x += npc.speed * npc.direction;
+                
+                // Keep NPCs within video bounds
+                const minBound = videoOffsetX + 50;
+                const maxBound = videoOffsetX + videoWidth - 50;
+                
+                if (npc.x < minBound || npc.x > maxBound) {
+                    npc.direction *= -1;
+                    npc.x = Math.max(minBound, Math.min(maxBound, npc.x));
+                }
+            });
+        }
+
+        // Add speech bubble
+        function addSpeechBubble(text, isUser) {
+            const bubble = {
+                text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+                x: isUser ? character.x : vendingMachine.x + vendingMachine.width / 2,
+                y: isUser ? character.y - character.height - 20 : vendingMachine.y - 20,
+                opacity: 1,
+                age: 0,
+                isUser: isUser
+            };
+            
+            speechBubbles.push(bubble);
+            
+            // Keep only last 3 bubbles
+            if (speechBubbles.length > 3) {
+                speechBubbles.shift();
+            }
+        }
+
+        // Draw speech bubbles
+        function drawSpeechBubbles() {
+            speechBubbles.forEach((bubble, index) => {
+                if (bubble.opacity > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = bubble.opacity;
+                    
+                    // Measure text
+                    ctx.font = '12px sans-serif';
+                    const textWidth = ctx.measureText(bubble.text).width;
+                    const bubbleWidth = Math.min(textWidth + 20, 200);
+                    const bubbleHeight = 30;
+                    
+                    // Bubble background
+                    ctx.fillStyle = bubble.isUser ? 'rgba(102, 126, 234, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+                    
+                    // Draw rounded rectangle
+                    ctx.beginPath();
+                    ctx.roundRect(
+                        bubble.x - bubbleWidth/2,
+                        bubble.y - bubbleHeight/2,
+                        bubbleWidth,
+                        bubbleHeight,
+                        10
+                    );
+                    ctx.fill();
+                    
+                    // Bubble tail
+                    ctx.beginPath();
+                    ctx.moveTo(bubble.x - 5, bubble.y + bubbleHeight/2);
+                    ctx.lineTo(bubble.x + 5, bubble.y + bubbleHeight/2);
+                    ctx.lineTo(bubble.x, bubble.y + bubbleHeight/2 + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Text
+                    ctx.fillStyle = bubble.isUser ? '#ffffff' : '#333333';
+                    ctx.font = '12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(bubble.text, bubble.x, bubble.y);
+                    
+                    ctx.restore();
+                }
+            });
+        }
+
+        // Update speech bubbles
+        function updateSpeechBubbles() {
+            speechBubbles.forEach(bubble => {
+                bubble.age++;
+                if (bubble.age > 180) { // Fade after 3 seconds at 60fps
+                    bubble.opacity = Math.max(0, bubble.opacity - 0.02);
+                }
+            });
+            
+            // Remove fully faded bubbles
+            speechBubbles = speechBubbles.filter(b => b.opacity > 0);
+        }
+
+        // Animation loop
+        function animate() {
+            // Clear canvas
+            ctx.clearRect(0, 0, sceneWidth, sceneHeight);
+            
+            // Draw scene elements on top of video
+            drawGround();
+            drawVendingMachine();
+            drawNPCs();
+            drawCharacter();
+            drawSpeechBubbles();
+            
+            // Update
+            updateCharacter();
+            updateNPCs();
+            updateSpeechBubbles();
+            
+            // Update vending machine glow
+            if (vendingMachine.glowing) {
+                vendingMachine.glowIntensity = Math.sin(Date.now() * 0.005) * 0.5 + 0.5;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Chat functionality
+        const ETHERIUS_URL = 'http://localhost:8100/chat';
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                sendMessage();
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Convert markdown-style formatting to HTML
+            let formattedContent = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+            
+            contentDiv.innerHTML = formattedContent;
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Add speech bubble in scene
+            addSpeechBubble(content, isUser);
+            
+            // Move character to vending machine when talking (within bounds)
+            if (isUser) {
+                const targetX = vendingMachine.x - 100;
+                const minBound = videoOffsetX + 50;
+                const maxBound = videoOffsetX + videoWidth - 50;
+                character.targetX = Math.max(minBound, Math.min(maxBound, targetX));
+                character.state = 'talking';
+            } else {
+                vendingMachine.glowing = true;
+                setTimeout(() => {
+                    vendingMachine.glowing = false;
+                }, 2000);
+            }
+        }
+
+        function showTyping() {
+            document.getElementById('typingIndicator').classList.add('show');
+            vendingMachine.glowing = true;
+        }
+
+        function hideTyping() {
+            document.getElementById('typingIndicator').classList.remove('show');
+            vendingMachine.glowing = false;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message
+            addMessage(message, true);
+            
+            // Clear input and disable while processing
+            input.value = '';
+            input.disabled = true;
+            sendButton.disabled = true;
+            
+            // Show typing indicator
+            showTyping();
+            
+            try {
+                const response = await fetch(ETHERIUS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Hide typing and add bot response
+                hideTyping();
+                addMessage(data.response || 'Sorry, I couldn\'t process that request.');
+                
+            } catch (error) {
+                hideTyping();
+                console.error('Error:', error);
+                
+                if (error.message.includes('Failed to fetch')) {
+                    addMessage('⚠️ Cannot connect to the Etherius agent. Please make sure it\'s running.', false);
+                } else {
+                    addMessage('Sorry, something went wrong. Please try again.', false);
+                }
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendButton.disabled = false;
+                input.focus();
+                
+                // Character returns to idle after conversation
+                setTimeout(() => {
+                    character.state = 'idle';
+                }, 3000);
+            }
+        }
+
+        // Initialize on load
+        window.onload = () => {
+            const video = document.querySelector('.video-strip video');
+            
+            // Wait for video metadata to load before initializing
+            if (video) {
+                video.addEventListener('loadedmetadata', () => {
+                    initCanvas();
+                    animate();
+                });
+                
+                // Fallback if video is already loaded
+                if (video.readyState >= 1) {
+                    initCanvas();
+                    animate();
+                }
+            } else {
+                // Fallback if no video
+                initCanvas();
+                animate();
+            }
+            
+            document.getElementById('chatInput').focus();
+        };
+
+        // Handle window resize
+        window.addEventListener('resize', initCanvas);
+    </script>
+</body>
+</html>
