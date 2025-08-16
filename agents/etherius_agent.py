@@ -388,6 +388,13 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
     response = await mcp_client.query_with_gpt(req.message)
     return ChatResponse(response=response)
 
+@agent.on_message(model=BroadcastMessage)
+async def handle_agent_response(ctx: Context, sender: str, msg: BroadcastMessage):
+    """Handle responses from other agents (like Vitalik's GPT response)"""
+    ctx.logger.info(f"📬 Received response from {sender}")
+    ctx.logger.info(f"📝 Original sender: {msg.original_sender}")
+    ctx.logger.info(f"💬 Response: {msg.message}")
+
 @agent.on_rest_get("/health", ChatResponse)
 async def health_check(ctx: Context) -> ChatResponse:
     ctx.logger.info("Health check requested")
