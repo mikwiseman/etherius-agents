@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model, Protocol
 from pydantic import Field
-import openai
+from openai import OpenAI
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ agent = Agent(
 )
 
 # OpenAI configuration
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI()
 
 # Product categories
 class ProductCategory(str, Enum):
@@ -219,7 +219,7 @@ async def get_ai_recommendation(query: str, available_products: List[Product]) -
         Consider factors like price, health, and user preferences."""
         
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": "You are a helpful AI vending machine assistant."},
                 {"role": "user", "content": prompt}
