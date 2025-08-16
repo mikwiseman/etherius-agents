@@ -22,7 +22,6 @@ agent = Agent(
     mailbox=True,
 )
 
-# OpenAI configuration - ALWAYS use gpt-4o
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Simple Models
@@ -119,7 +118,7 @@ Example: {{"tool": "search_collections", "args": {{"query": "pudgy penguins", "l
         try:
             # Get GPT-4o to generate the MCP request
             response = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You generate OpenSea MCP API requests. Respond only with valid JSON!!, no ```, no markdown or extra text."},
                     {"role": "user", "content": tool_prompt}
@@ -167,7 +166,7 @@ Provide a friendly, informative response with:
 """
 
             response = openai_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You parse NFT data and provide clear summaries."},
                     {"role": "user", "content": parse_prompt}
