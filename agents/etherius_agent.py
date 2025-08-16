@@ -15,8 +15,8 @@ load_dotenv()
 
 # Agent configuration
 agent = Agent(
-    name="etherius_simple",
-    seed=os.getenv("ETHERIUS_SEED", "etherius_simple_gpt4o_2025"),
+    name="etherius_agent_mik2025",
+    seed="etherius_agent_mik_2025",
     port=int(os.getenv("ETHERIUS_PORT", 8100)),
     endpoint=[f"http://localhost:{os.getenv('ETHERIUS_PORT', 8100)}/submit"],
     mailbox=True,
