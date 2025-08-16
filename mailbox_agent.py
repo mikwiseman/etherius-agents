@@ -8,7 +8,7 @@ SEED_PHRASE = "mailbox282828"
 # Now your agent is ready to join the Agentverse!
 agent = Agent(
     name="mailbox282828",
-    port=8000,
+    port=8028,
     mailbox=True        
 )
  
