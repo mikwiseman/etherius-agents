@@ -2,7 +2,8 @@ import os
 import sys
 import json
 import httpx
-from typing import Dict, Any, Optional
+import time
+from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model
@@ -38,6 +39,14 @@ class ChatResponse(Model):
 class BroadcastMessage(Model):
     message: str
     original_sender: str
+
+class AgentMessage(Model):
+    agent_name: str
+    message: str
+    timestamp: float
+
+class AgentMessagesResponse(Model):
+    messages: List[AgentMessage]
 
 
 class SimpleOpenSeaMCP:
@@ -336,6 +345,10 @@ katrik_agent_address = None
 vitalik_agent_address = None
 tv_agent_address = None
 
+# Store recent agent messages (keep last 50)
+agent_messages: List[AgentMessage] = []
+MAX_MESSAGES = 50
+
 @agent.on_event("startup")
 async def startup(ctx: Context):
     global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address
@@ -364,6 +377,7 @@ async def startup(ctx: Context):
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
 async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
     """Chat endpoint that uses ASI:One Mini to handle all OpenSea queries and broadcasts to other agents"""
+    global agent_messages
     ctx.logger.info(f"💬 Chat: {req.message}")
     
     # Broadcast the message to all three agents
@@ -386,14 +400,56 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
         return ChatResponse(response="Agent not initialized. Please restart.")
     
     response = await mcp_client.query_with_gpt(req.message)
+    
+    # Store Etherius's response
+    agent_msg = AgentMessage(
+        agent_name="Etherius",
+        message=response,
+        timestamp=time.time()
+    )
+    agent_messages.append(agent_msg)
+    
+    # Keep only last MAX_MESSAGES
+    if len(agent_messages) > MAX_MESSAGES:
+        agent_messages = agent_messages[-MAX_MESSAGES:]
+    
     return ChatResponse(response=response)
 
 @agent.on_message(model=BroadcastMessage)
 async def handle_agent_response(ctx: Context, sender: str, msg: BroadcastMessage):
     """Handle responses from other agents (like Vitalik's GPT response)"""
+    global agent_messages
     ctx.logger.info(f"📬 Received response from {sender}")
     ctx.logger.info(f"📝 Original sender: {msg.original_sender}")
     ctx.logger.info(f"💬 Response: {msg.message}")
+    
+    # Determine agent name from sender address
+    agent_name = "Unknown"
+    if sender == katrik_agent_address:
+        agent_name = "Katrik"
+    elif sender == vitalik_agent_address:
+        agent_name = "Vitalik"
+    elif sender == tv_agent_address:
+        agent_name = "TV"
+    
+    # Store the agent's response
+    agent_msg = AgentMessage(
+        agent_name=agent_name,
+        message=msg.message,
+        timestamp=time.time()
+    )
+    agent_messages.append(agent_msg)
+    
+    # Keep only last MAX_MESSAGES
+    if len(agent_messages) > MAX_MESSAGES:
+        agent_messages = agent_messages[-MAX_MESSAGES:]
+
+@agent.on_rest_get("/agent_messages", AgentMessagesResponse)
+async def get_agent_messages(ctx: Context) -> AgentMessagesResponse:
+    """Get recent agent messages for frontend polling"""
+    global agent_messages
+    ctx.logger.info(f"Agent messages requested, returning {len(agent_messages)} messages")
+    return AgentMessagesResponse(messages=agent_messages)
 
 @agent.on_rest_get("/health", ChatResponse)
 async def health_check(ctx: Context) -> ChatResponse:

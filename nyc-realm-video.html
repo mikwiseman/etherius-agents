@@ -78,37 +78,46 @@
             z-index: 10;
         }
 
-        .speech-bubble.user {
+        .speech-bubble.etherius {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            border: none;
         }
 
-        .speech-bubble.bot {
-            background: #ffffff;
-            color: #333;
-            border: 2px solid #667eea;
+        .speech-bubble.vitalik {
+            background: #52C41A;
+            color: white;
+            border: none;
+        }
+
+        .speech-bubble.katrik {
+            background: #4A90E2;
+            color: white;
+            border: none;
         }
 
         .speech-bubble:after {
             content: '';
             position: absolute;
             bottom: -10px;
-            left: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             width: 0;
             height: 0;
             border-left: 10px solid transparent;
             border-right: 10px solid transparent;
-            border-top: 10px solid white;
         }
 
-        .speech-bubble.user:after {
-            border-top-color: #764ba2;
+        .speech-bubble.etherius:after {
+            border-top: 10px solid #764ba2;
         }
 
-        .speech-bubble.bot:after {
-            left: auto;
-            right: 20px;
-            border-top-color: #667eea;
+        .speech-bubble.vitalik:after {
+            border-top: 10px solid #52C41A;
+        }
+
+        .speech-bubble.katrik:after {
+            border-top: 10px solid #4A90E2;
         }
 
         .speech-bubble.show {
@@ -168,6 +177,30 @@
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
             border: 1px solid #667eea;
+        }
+
+        .message-content .agent-name {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .agent-name.etherius {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .agent-name.vitalik {
+            color: #52C41A;
+        }
+
+        .agent-name.katrik {
+            color: #4A90E2;
+        }
+
+        .agent-name.tv {
+            color: #FF8C00;
         }
 
         .chat-input-container {
@@ -383,7 +416,18 @@
             screenDisplay.image = screenImage;
         };
 
-        let speechBubbles = [];
+        // Character-specific speech bubbles
+        let characterBubbles = {
+            etherius: null,
+            vitalik: null,
+            katrik: null
+        };
+        
+        // Track last message timestamp to avoid duplicates
+        let lastMessageTimestamp = 0;
+        
+        // Polling interval
+        let pollingInterval = null;
         
         // Initialize canvas
         function initCanvas() {
@@ -614,29 +658,49 @@
         }
 
 
-        // Add speech bubble
-        function addSpeechBubble(text, isUser) {
-            const bubble = {
-                text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-                x: isUser ? character.x : vendingMachine.x + vendingMachine.width / 2,
-                y: isUser ? character.y - character.height - 20 : vendingMachine.y - 20,
+        // Update character speech bubble
+        function updateCharacterBubble(agentName, text) {
+            // Truncate text for bubble
+            const bubbleText = text.substring(0, 50) + (text.length > 50 ? '...' : '');
+            
+            let x, y;
+            switch(agentName.toLowerCase()) {
+                case 'etherius':
+                    x = vendingMachine.x;
+                    y = vendingMachine.y - 20;
+                    vendingMachine.glowing = true;
+                    setTimeout(() => { vendingMachine.glowing = false; }, 3000);
+                    break;
+                case 'vitalik':
+                    x = character2.x;
+                    y = character2.y - character2.height - 20;
+                    character2.state = 'talking';
+                    setTimeout(() => { character2.state = 'idle'; }, 3000);
+                    break;
+                case 'katrik':
+                    x = character.x;
+                    y = character.y - character.height - 20;
+                    character.state = 'talking';
+                    setTimeout(() => { character.state = 'idle'; }, 3000);
+                    break;
+                default:
+                    return; // Don't show bubble for TV or unknown agents
+            }
+            
+            characterBubbles[agentName.toLowerCase()] = {
+                text: bubbleText,
+                x: x,
+                y: y,
                 opacity: 1,
                 age: 0,
-                isUser: isUser
+                agentName: agentName.toLowerCase()
             };
-            
-            speechBubbles.push(bubble);
-            
-            // Keep only last 3 bubbles
-            if (speechBubbles.length > 3) {
-                speechBubbles.shift();
-            }
         }
 
-        // Draw speech bubbles
+        // Draw character speech bubbles
         function drawSpeechBubbles() {
-            speechBubbles.forEach((bubble, index) => {
-                if (bubble.opacity > 0) {
+            Object.values(characterBubbles).forEach(bubble => {
+                if (bubble && bubble.opacity > 0) {
                     ctx.save();
                     ctx.globalAlpha = bubble.opacity;
                     
@@ -646,8 +710,22 @@
                     const bubbleWidth = Math.min(textWidth + 20, 200);
                     const bubbleHeight = 30;
                     
-                    // Bubble background
-                    ctx.fillStyle = bubble.isUser ? 'rgba(102, 126, 234, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+                    // Bubble background color based on agent
+                    let fillStyle;
+                    switch(bubble.agentName) {
+                        case 'etherius':
+                            fillStyle = 'rgba(102, 126, 234, 0.95)';
+                            break;
+                        case 'vitalik':
+                            fillStyle = 'rgba(82, 196, 26, 0.95)';
+                            break;
+                        case 'katrik':
+                            fillStyle = 'rgba(74, 144, 226, 0.95)';
+                            break;
+                        default:
+                            fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    }
+                    ctx.fillStyle = fillStyle;
                     
                     // Draw rounded rectangle
                     ctx.beginPath();
@@ -669,7 +747,7 @@
                     ctx.fill();
                     
                     // Text
-                    ctx.fillStyle = bubble.isUser ? '#ffffff' : '#333333';
+                    ctx.fillStyle = '#ffffff';
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
@@ -680,17 +758,22 @@
             });
         }
 
-        // Update speech bubbles
+        // Update speech bubbles (fade out after time)
         function updateSpeechBubbles() {
-            speechBubbles.forEach(bubble => {
-                bubble.age++;
-                if (bubble.age > 180) { // Fade after 3 seconds at 60fps
-                    bubble.opacity = Math.max(0, bubble.opacity - 0.02);
+            Object.keys(characterBubbles).forEach(key => {
+                const bubble = characterBubbles[key];
+                if (bubble) {
+                    bubble.age++;
+                    if (bubble.age > 420) { // Fade after 7 seconds at 60fps
+                        bubble.opacity = Math.max(0, bubble.opacity - 0.02);
+                    }
+                    
+                    // Remove fully faded bubble
+                    if (bubble.opacity <= 0) {
+                        characterBubbles[key] = null;
+                    }
                 }
             });
-            
-            // Remove fully faded bubbles
-            speechBubbles = speechBubbles.filter(b => b.opacity > 0);
         }
 
         // Animation loop
@@ -726,7 +809,7 @@
             }
         }
 
-        function addMessage(content, isUser = false) {
+        function addMessage(content, isUser = false, agentName = null) {
             const messagesDiv = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
@@ -734,8 +817,15 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
             
+            // Add agent name if provided
+            let formattedContent = content;
+            if (agentName) {
+                const agentClass = agentName.toLowerCase();
+                formattedContent = `<span class="agent-name ${agentClass}">[${agentName}]:</span> ${content}`;
+            }
+            
             // Convert markdown-style formatting to HTML
-            let formattedContent = content
+            formattedContent = formattedContent
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\n/g, '<br>');
             
@@ -746,8 +836,10 @@
             // Scroll to bottom
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
             
-            // Add speech bubble in scene
-            addSpeechBubble(content, isUser);
+            // Update character speech bubble for agents
+            if (agentName && !isUser) {
+                updateCharacterBubble(agentName, content);
+            }
             
             // Move character to vending machine when talking (scale-aware positioning)
             if (isUser) {
@@ -756,11 +848,27 @@
                 const maxBound = videoOffsetX + videoWidth - character.width/2;
                 character.targetX = Math.max(minBound, Math.min(maxBound, targetX));
                 character.state = 'talking';
-            } else {
-                vendingMachine.glowing = true;
-                setTimeout(() => {
-                    vendingMachine.glowing = false;
-                }, 2000);
+            }
+        }
+        
+        // Poll for agent messages
+        async function pollAgentMessages() {
+            try {
+                const response = await fetch('http://localhost:8100/agent_messages');
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                const messages = data.messages || [];
+                
+                // Process new messages
+                messages.forEach(msg => {
+                    if (msg.timestamp > lastMessageTimestamp) {
+                        addMessage(msg.message, false, msg.agent_name);
+                        lastMessageTimestamp = msg.timestamp;
+                    }
+                });
+            } catch (error) {
+                console.error('Error polling agent messages:', error);
             }
         }
 
@@ -807,9 +915,9 @@
                 
                 const data = await response.json();
                 
-                // Hide typing and add bot response
+                // Hide typing and add Etherius response (already stored on backend)
                 hideTyping();
-                addMessage(data.response || 'Sorry, I couldn\'t process that request.');
+                // Don't add here as it will be picked up by polling
                 
             } catch (error) {
                 hideTyping();
@@ -856,10 +964,23 @@
             }
             
             document.getElementById('chatInput').focus();
+            
+            // Start polling for agent messages
+            pollingInterval = setInterval(pollAgentMessages, 2000);
+            
+            // Initial poll
+            pollAgentMessages();
         };
 
         // Handle window resize
         window.addEventListener('resize', initCanvas);
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+        });
     </script>
 </body>
 </html>
