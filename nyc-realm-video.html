@@ -303,17 +303,40 @@
             speed: 2,
             state: 'idle', // idle, walking, talking
             direction: 1,
-            width: 30,
-            height: 50
+            width: 120,  // Will be recalculated based on video size
+            height: 180, // Will be recalculated based on video size (1.5x width for 2:3 ratio)
+            baseWidth: 0.08, // 8% of video width
+            baseHeight: 0.12, // 12% of video width (1.5x width for proper aspect ratio)
+            relativeX: 0.35, // Fixed at 35% across the video width
+            image: null
+        };
+        
+        // Load character image
+        const characterImage = new Image();
+        characterImage.src = 'katrik.png';
+        characterImage.onload = () => {
+            character.image = characterImage;
         };
         
         let vendingMachine = {
             x: 500,
             y: 0,
-            width: 80,
-            height: 120,
+            width: 200,  // Will be recalculated based on video size
+            height: 200, // Will be recalculated based on video size
+            baseWidth: 0.15, // 15% of video width
+            baseHeight: 0.15, // 15% of video width (keep aspect ratio)
+            relativeX: 0.6, // Fixed at 60% across the video width
+            relativeY: 0.458, // Fixed at 50% down the video height (moved up)
             glowing: false,
-            glowIntensity: 0
+            glowIntensity: 0,
+            image: null
+        };
+        
+        // Load vending machine image
+        const vendingMachineImage = new Image();
+        vendingMachineImage.src = 'eth.png';
+        vendingMachineImage.onload = () => {
+            vendingMachine.image = vendingMachineImage;
         };
 
         let npcs = [
@@ -332,6 +355,8 @@
             
             // Calculate video dimensions based on aspect ratio with object-fit: contain
             const video = document.querySelector('.video-strip video');
+            let videoOffsetY = -20;
+            
             if (video && video.videoWidth && video.videoHeight) {
                 const videoAspect = video.videoWidth / video.videoHeight;
                 const canvasAspect = sceneWidth / sceneHeight;
@@ -341,11 +366,13 @@
                     videoWidth = sceneWidth;
                     videoHeight = videoWidth / videoAspect;
                     videoOffsetX = 0;
+                    videoOffsetY = (sceneHeight - videoHeight) / 2;
                 } else {
                     // Video is taller - letterboxed left/right
                     videoHeight = sceneHeight;
                     videoWidth = videoHeight * videoAspect;
                     videoOffsetX = (sceneWidth - videoWidth) / 2;
+                    videoOffsetY = 0;
                 }
             } else {
                 // Fallback if video not loaded yet - assume 16:9 aspect ratio
@@ -356,26 +383,32 @@
                     videoWidth = sceneWidth;
                     videoHeight = videoWidth / videoAspect;
                     videoOffsetX = 0;
+                    videoOffsetY = (sceneHeight - videoHeight) / 2;
                 } else {
                     videoHeight = sceneHeight;
                     videoWidth = videoHeight * videoAspect;
                     videoOffsetX = (sceneWidth - videoWidth) / 2;
+                    videoOffsetY = 0;
                 }
             }
             
             // Set ground level (bottom of the video area)
             groundLevel = sceneHeight - 50;
             
-            // Position character within video bounds
-            const centerX = videoOffsetX + videoWidth / 2;
-            character.x = centerX - 150;
+            // Scale and position character relative to video size (like vending machine)
+            character.width = videoWidth * character.baseWidth;
+            character.height = character.width * 1.5; // Maintain 2:3 aspect ratio (1024:1536)
+            character.x = videoOffsetX + (videoWidth * character.relativeX);
             character.y = groundLevel;
             character.targetY = groundLevel;
             character.targetX = character.x;
             
-            // Position vending machine within video bounds
-            vendingMachine.x = centerX + 50;
-            vendingMachine.y = groundLevel - vendingMachine.height;
+            // Scale and position vending machine at fixed relative position in video
+            vendingMachine.width = videoWidth * vendingMachine.baseWidth;
+            vendingMachine.height = videoWidth * vendingMachine.baseHeight; // Keep square aspect ratio
+            // Lock position to exact percentage of video dimensions
+            vendingMachine.x = videoOffsetX + (videoWidth * vendingMachine.relativeX);
+            vendingMachine.y = videoOffsetY + (videoHeight * vendingMachine.relativeY);
             
             // Position NPCs within video bounds
             npcs[0].x = videoOffsetX + videoWidth * 0.2;
@@ -400,73 +433,50 @@
 
         // Draw vending machine
         function drawVendingMachine() {
-            const { x, y, width, height, glowing, glowIntensity } = vendingMachine;
+            const { x, y, width, height, glowing, glowIntensity, image } = vendingMachine;
             
             // Glow effect
             if (glowing) {
-                ctx.shadowBlur = 20 + glowIntensity * 10;
+                ctx.shadowBlur = 30 + glowIntensity * 15;
                 ctx.shadowColor = '#667eea';
             }
             
-            // Machine body with transparency to see video behind
-            ctx.fillStyle = 'rgba(74, 74, 106, 0.8)';
-            ctx.fillRect(x, y, width, height);
-            
-            // Screen
-            ctx.fillStyle = glowing ? 'rgba(102, 126, 234, 0.9)' : 'rgba(42, 42, 74, 0.9)';
-            ctx.fillRect(x + 10, y + 10, width - 20, height * 0.4);
-            
-            // "ETHERIUS" text
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 12px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('ETHERIUS', x + width/2, y + 35);
-            
-            // NFT display
-            ctx.font = '10px monospace';
-            ctx.fillStyle = '#9fa8da';
-            ctx.fillText('NFT ORACLE', x + width/2, y + 50);
-            
-            // Buttons
-            const buttonColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'];
-            for (let i = 0; i < 4; i++) {
-                ctx.fillStyle = buttonColors[i];
-                ctx.fillRect(x + 15 + (i * 15), y + 70, 10, 10);
+            // Draw the eth.png image if loaded
+            if (image) {
+                ctx.drawImage(image, x - width/2, y, width, height);
+                
+                // Add overlay glow effect when glowing
+                if (glowing) {
+                    ctx.globalAlpha = 0.3 * glowIntensity;
+                    ctx.fillStyle = '#667eea';
+                    ctx.fillRect(x - width/2, y, width, height);
+                    ctx.globalAlpha = 1;
+                }
+            } else {
+                // Fallback: simple rectangle if image not loaded
+                ctx.fillStyle = glowing ? 'rgba(102, 126, 234, 0.9)' : 'rgba(74, 74, 106, 0.8)';
+                ctx.fillRect(x - width/2, y, width, height);
             }
             
-            ctx.shadowBlur = 0;
         }
 
         // Draw character sprite
         function drawCharacter() {
-            const { x, y, width, height, state } = character;
+            const { x, y, width, height, image } = character;
             
             // Shadow
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.ellipse(x, y + height/2, width/2, 5, 0, 0, Math.PI * 2);
+            ctx.ellipse(x, y + 5, width/3, 5, 0, 0, Math.PI * 2);
             ctx.fill();
             
-            // Simple character with semi-transparency
-            ctx.fillStyle = 'rgba(255, 217, 61, 0.9)';
-            ctx.beginPath();
-            ctx.arc(x, y - height + 15, 15, 0, Math.PI * 2); // Head
-            ctx.fill();
-            
-            // Body
-            ctx.fillStyle = 'rgba(108, 92, 231, 0.9)';
-            ctx.fillRect(x - width/2, y - height + 30, width, height - 20);
-            
-            // Legs
-            ctx.fillStyle = 'rgba(45, 52, 54, 0.9)';
-            ctx.fillRect(x - width/2 + 2, y + 10, width/2 - 2, 15);
-            ctx.fillRect(x + 1, y + 10, width/2 - 2, 15);
-            
-            // Eyes
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(x - 5, y - height + 15, 2, 0, Math.PI * 2);
-            ctx.arc(x + 5, y - height + 15, 2, 0, Math.PI * 2);
-            ctx.fill();
+            // Draw the katrik.png image if loaded
+            if (image) {
+                ctx.drawImage(image, x - width/2, y - height, width, height);
+            } else {
+                // Fallback: simple character if image not loaded
+                ctx.fillStyle = 'rgba(108, 92, 231, 0.9)';
+                ctx.fillRect(x - width/2, y - height, width, height);
+            }
         }
 
         // Draw NPCs
@@ -671,11 +681,11 @@
             // Add speech bubble in scene
             addSpeechBubble(content, isUser);
             
-            // Move character to vending machine when talking (within bounds)
+            // Move character to vending machine when talking (scale-aware positioning)
             if (isUser) {
-                const targetX = vendingMachine.x - 100;
-                const minBound = videoOffsetX + 50;
-                const maxBound = videoOffsetX + videoWidth - 50;
+                const targetX = vendingMachine.x - (videoWidth * 0.08); // Position relative to video width
+                const minBound = videoOffsetX + character.width/2;
+                const maxBound = videoOffsetX + videoWidth - character.width/2;
                 character.targetX = Math.max(minBound, Math.min(maxBound, targetX));
                 character.state = 'talking';
             } else {
