@@ -96,26 +96,50 @@ class SimpleOpenSeaMCP:
             return "Failed to initialize OpenSea MCP session."
         
         # Step 1: Use GPT-4o to determine the right MCP tool and arguments
-        tool_prompt = f"""You are an NFT expert helping query OpenSea's MCP API.
-        
-User Query: "{user_query}"
+        tool_prompt = f"""
+You are a tool router for OpenSea MCP. Choose exactly ONE tool and the minimal, valid arguments to satisfy the user's request.
+Return ONLY a JSON object with keys "tool" and "args". No markdown, no code fences, no extra text.
 
-Available OpenSea MCP tools:
-1. search_collections - Search for NFT collections
-   Args: query (string), limit (number, default 10), chain (optional: ethereum/polygon/base/solana)
-   
-2. get_collection - Get detailed info about a specific collection
-   Args: slug (string - the collection identifier), includes (array of: analytics/offers/holders/activity/items/attributes)
-   
-3. get_trending_collections - Get trending collections
-   Args: timeframe (ONE_HOUR/ONE_DAY/SEVEN_DAYS/THIRTY_DAYS), limit (number), chain (optional)
-   
-4. get_top_collections - Get top collections
-   Args: sortBy (REQUIRED - one of: FLOOR_PRICE, ONE_DAY_VOLUME, ONE_DAY_SALES, VOLUME, SALES), limit (number, default 10), chain (optional)
+USER QUERY:
+"{user_query}"
 
-Based on the user's query, respond with ONLY a JSON object with the tool name and arguments.
-Example: {{"tool": "search_collections", "args": {{"query": "pudgy penguins", "limit": 5}}}}
+ALLOWED TOOLS:
+- "search" — AI-powered marketplace search
+- "fetch" — Fetch full details for an entity by id
+- "search_collections"
+- "get_collection" — includes: analytics, offers, holders, activity, items, attributes
+- "search_items"
+- "get_item" — includes: activity, offers, owners, analytics
+- "search_tokens"
+- "get_token" — includes: priceHistory, activity, ohlcv
+- "get_token_swap_quote"
+- "get_token_balances"
+- "get_token_balance"
+- "get_nft_balances"
+- "get_profile" — includes: items, collections, activity, listings, offers, balances, favorites
+- "get_top_tokens"
+- "get_trending_tokens"
+- "get_top_collections"
+- "get_trending_collections"
+
+ARGUMENT RULES:
+- Chains: normalize to one of {{ "ethereum","polygon","base","solana" }}.
+  Aliases → canonical: eth|mainnet→ethereum; matic→polygon; sol→solana.
+- Timeframes: ONE_HOUR | ONE_DAY | SEVEN_DAYS | THIRTY_DAYS.
+- get_top_collections.sortBy: FLOOR_PRICE | ONE_DAY_VOLUME | ONE_DAY_SALES | VOLUME | SALES.
+- Use only relevant args (query, slug, address, symbol, contract, tokenId, limit, chain, includes, fromToken, toToken, amount).
+- Never invent parameters. Omit null/empty values. Keep args minimal and correct.
+
+OUTPUT (examples; adapt to the user query):
+{{"tool":"search_collections","args":{{"query":"pudgy penguins","limit":5,"chain":"ethereum"}}}}
+{{"tool":"get_collection","args":{{"slug":"boredapeyachtclub","includes":["analytics","items"]}}}}
+{{"tool":"get_trending_collections","args":{{"timeframe":"ONE_DAY","limit":10}}}}
+{{"tool":"get_top_collections","args":{{"sortBy":"ONE_DAY_VOLUME","limit":10,"chain":"ethereum"}}}}
+{{"tool":"get_profile","args":{{"address":"vitalik.eth"}}}}
+{{"tool":"get_token","args":{{"symbol":"USDC","chain":"ethereum"}}}}
+{{"tool":"get_token_swap_quote","args":{{"fromToken":"ETH","toToken":"USDC","amount":"0.40","chain":"ethereum"}}}}
 """
+
 
         try:
             # Get GPT-4o to generate the MCP request
@@ -153,19 +177,38 @@ Example: {{"tool": "search_collections", "args": {{"query": "pudgy penguins", "l
             if "error" in mcp_result:
                 return f"❌ Error: {mcp_result['error']}"
             
-            parse_prompt = f"""You are an NFT expert. Parse this OpenSea MCP response and provide a clear, concise summary for the user.
+            parse_prompt = f"""
+You are an NFT & token analyst. Read the OpenSea MCP response and write a concise, factual summary.
 
-User's original question: "{user_query}"
-MCP Tool Used: {tool_name}
-Raw Response: {json.dumps(mcp_result, indent=2)}
+USER QUESTION:
+{user_query}
 
-Provide a friendly, informative response with:
-- Key collection names and stats (floor price, volume, etc.)
-- Format numbers nicely (e.g., 2.5 ETH, 1,234 sales)
-- Include OpenSea links where relevant
-- Use bullet points or a simple table format
-- Keep it concise but informative
+MCP TOOL USED:
+{tool_name}
+
+RAW RESPONSE (JSON):
+{json.dumps(mcp_result, indent=2)}
+
+GUIDELINES:
+- If the tool returned collections: include name, slug, chain, floor price, 1d/7d volume/sales if present, supply/owners if present. Note trend arrows (↑/↓) only if explicit in data.
+- If it returned items: include collection, tokenId, current listing or last sale, 2–3 notable traits (with rarity if present), owner or owner count if provided.
+- If it returned a profile or balances: show token holdings (symbol + balance + any USD fields provided), NFT count, top collections, and recent activity if present.
+- If it returned tokens: show symbol/name, price and % change (1d/7d) if present, chain if relevant.
+- If it returned a swap quote: show expectedOut, minimumReceived (if present), gas estimate, and (only if also provided in the response or question) whether it is enough to buy the referenced floor.
+- Numbers: format like "2.45 ETH", "1,234 sales", "$12,340". If a field is missing, output "—".
+- Links: when identifiers exist, include OpenSea links:
+  • Collection → https://opensea.io/collection/{{slug}}
+  • Item → https://opensea.io/assets/{{chain}}/{{contract}}/{{tokenId}}
+  • Profile → https://opensea.io/{{address_or_ens}}
+- Be crisp and use bullet points or a compact table. Do not invent data. If there was an error field, mention it briefly and provide a next step.
+
+END WITH:
+- 2–3 suggested next actions tailored to the result (e.g., "Show 24h trending on Polygon", "List 5 cheapest items under 0.1 ETH", "Quote 0.2 ETH→USDC on Base").
+
+OUTPUT:
+Plain text only. No JSON. No code fences.
 """
+
 
             response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
