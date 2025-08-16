@@ -1,271 +1,132 @@
-# 🌟 EtheriusVerse - Multi-Agent AI Ecosystem on Fetch.ai
+# Etherius Agent - NFT Intelligence Service
 
-Welcome to **EtheriusVerse**, an advanced multi-agent ecosystem built on Fetch.ai's uAgents framework. This project features intelligent autonomous agents that handle everything from NFT trading to memecoin generation, all orchestrated through a beautiful 2D interactive frontend.
+## 🎯 Purpose
 
-## 🚀 Overview
+The Etherius Agent is an AI-powered NFT intelligence service that bridges natural language queries with real-time NFT marketplace data. Built on Fetch.ai's decentralized agent framework, it democratizes access to NFT market insights by allowing users to query complex NFT data using simple conversational language.
 
-EtheriusVerse is a comprehensive demonstration of decentralized AI agents working together to create a vibrant digital economy. Each agent specializes in different aspects of the crypto and commerce ecosystem, communicating seamlessly through the Fetch.ai network.
+## 🚀 Core Functionalities
 
-## 🤖 Agent Roster
+### 1. **Natural Language NFT Queries**
+- Interprets user intent from conversational queries
+- Automatically determines the appropriate OpenSea MCP tool to use
+- Handles complex queries about collections, trends, and market data
 
-### 1. **AI Vending Machine Agent** 🎰
-- **Capabilities**: Product inventory, dynamic pricing, AI recommendations
-- **Features**: 
-  - OpenAI-powered product recommendations
-  - Dynamic pricing based on demand and inventory
-  - X402 payment protocol integration
-  - Real-time stock management
+### 2. **OpenSea MCP Integration**
+- **Search Collections**: Find NFT collections by name or keyword
+- **Get Collection Details**: Retrieve comprehensive stats including floor price, volume, holders
+- **Trending Analysis**: Identify trending collections across different timeframes (1h, 24h, 7d, 30d)
+- **Top Collections**: Rank collections by various metrics (volume, sales, floor price)
 
-### 2. **NFT Vending Machine Agent** 🖼️
-- **Capabilities**: NFT sales, OpenSea integration, price negotiation
-- **Features**:
-  - OpenSea MCP integration for marketplace data
-  - Dynamic NFT pricing and negotiation
-  - Rarity-based valuation
-  - X402 payment processing
+### 3. **Intelligent Response Formatting**
+- Parses raw OpenSea data into human-readable summaries
+- Formats prices, volumes, and statistics clearly
+- Provides relevant OpenSea links for further exploration
+- Presents data in organized bullet points or tables
 
-### 3. **NFT Analyzer Agent** 📊
-- **Capabilities**: Market analysis, trend prediction, investment insights
-- **Features**:
-  - Deep collection analysis
-  - Price predictions with confidence scores
-  - Risk assessment and opportunity scoring
-  - Multi-collection comparison
+### 4. **REST API Service**
+- Simple HTTP endpoint for integration: `POST /chat`
+- Health check endpoint: `GET /health`
+- JSON request/response format for easy integration
 
-### 4. **Memecoin Generator Agent** 🪙
-- **Capabilities**: Token creation, deployment, marketing
-- **Features**:
-  - AI-powered name and symbol generation
-  - Smart contract deployment (simulated)
-  - Liquidity pool creation
-  - Marketing package generation
+## 📋 Usage Guidelines
 
-### 5. **Orchestrator Agent** 🎯
-- **Capabilities**: Request routing, multi-agent coordination
-- **Features**:
-  - Intelligent request classification
-  - Multi-agent task distribution
-  - Session management
-  - Performance optimization
-
-### 6. **Etherius Mother Agent** 🌟
-- **Capabilities**: Agent generation, code synthesis, evolution
-- **Features**:
-  - Natural language to agent creation
-  - Template-based code generation
-  - Agent evolution and self-improvement
-  - Dynamic deployment
-
-## 🛠️ Technology Stack
-
-- **Backend**: Python 3.9+, Fetch.ai uAgents
-- **AI Integration**: OpenAI GPT-4, LangChain
-- **Blockchain**: Web3.py, Coinbase AgentKit
-- **Frontend**: React, TypeScript, Canvas API
-- **Communication**: WebSocket, REST APIs
-- **Payments**: X402 Protocol, OpenSea MCP
-
-## 📦 Installation
-
-### Prerequisites
-- Python 3.9 or higher
-- Node.js 16 or higher
-- Fetch.ai Agentverse account
-- OpenAI API key
-- OpenSea MCP access (beta)
-
-### Backend Setup
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/etherius-agents.git
-cd etherius-agents
+### Query Examples
+```
+"Show me the top 5 NFT collections by trading volume"
+"What's the floor price for Bored Apes?"
+"Find trending collections on Ethereum in the last 24 hours"
+"Search for gaming NFT collections"
+"Get detailed stats for Pudgy Penguins"
 ```
 
-2. Create virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+### Best Practices
+1. **Be Specific**: Include collection names, timeframes, or metrics when possible
+2. **Use Natural Language**: No need for technical terms or exact syntax
+3. **Iterate**: Follow up with more specific questions based on initial results
+4. **Verify Data**: Cross-reference critical data points with OpenSea directly
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### Integration Guidelines
+- **Rate Limiting**: Respect OpenSea MCP rate limits (varies by tier)
+- **Error Handling**: Implement retry logic for transient failures
+- **Caching**: Consider caching responses for frequently requested data
+- **Security**: Never expose API keys in client-side code
 
-4. Configure environment:
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-```
+## 🔧 Technical Specifications
 
-5. Start agents:
-```bash
-# Start individual agents
-python agents/orchestrator_agent.py
+### Dependencies
+- Python 3.9+ runtime
+- uAgents framework (v0.22.5)
+- OpenAI GPT-4o-mini for intelligence
+- OpenSea MCP for marketplace data
+- HTTPX for async HTTP operations
 
-# Or use the launcher script
-python launch_all_agents.py
-```
+### Performance
+- Average response time: 2-5 seconds
+- Concurrent request handling via async architecture
+- Automatic session management for MCP connections
+- Intelligent request batching when possible
 
-### Frontend Setup
+### Limitations
+- Requires OpenSea MCP beta access token
+- Limited to OpenSea marketplace data
+- Response quality depends on GPT-4o availability
+- Real-time data subject to OpenSea API latency
 
-1. Navigate to frontend:
-```bash
-cd frontend
-```
+## 📄 Licensing
 
-2. Install dependencies:
-```bash
-npm install
-```
+**MIT License**
 
-3. Start development server:
-```bash
-npm start
-```
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-## 🎮 Usage
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
-### Via Frontend
-1. Open http://localhost:3000 in your browser
-2. Watch agents move around in the 2D world
-3. Click on any agent to start chatting
-4. Use natural language to interact
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
-### Via API
-```python
-# Example: Query the orchestrator
-import requests
+## 📞 Contact & Support
 
-response = requests.post("http://localhost:8104/query", json={
-    "query": "I want to buy an NFT under 1 ETH",
-    "session_id": "user123"
-})
-```
+### Developer Contact
+- **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/etherius-agents/issues)
+- **Email**: developer@example.com
+- **Discord**: Join our community server for support
 
-### Via Fetch.ai Agentverse
-Agents are registered on Agentverse and can be accessed through the DeltaV interface.
-
-## 🏗️ Architecture
-
-```
-EtheriusVerse/
-├── agents/                 # Agent implementations
-│   ├── vending_machine_agent.py
-│   ├── nft_vending_agent.py
-│   ├── nft_analyzer_agent.py
-│   ├── memecoin_generator_agent.py
-│   ├── orchestrator_agent.py
-│   └── etherius_mother_agent.py
-├── protocols/             # Communication protocols
-├── utils/                 # Utility modules
-├── frontend/              # React frontend
-│   ├── src/
-│   │   ├── components/    # UI components
-│   │   ├── services/      # API services
-│   │   └── App.tsx
-│   └── package.json
-├── config/                # Configuration files
-├── requirements.txt       # Python dependencies
-└── README.md
-
-```
-
-## 🔑 Key Features
-
-### Dynamic Pricing
-Agents implement sophisticated pricing algorithms that respond to:
-- Supply and demand
-- Market conditions
-- Bulk purchases
-- Scarcity factors
-
-### AI-Powered Intelligence
-Every agent leverages OpenAI for:
-- Natural language understanding
-- Recommendation generation
-- Market analysis
-- Content creation
-
-### Decentralized Communication
-Agents communicate using:
-- Fetch.ai protocols
-- Structured message passing
-- Session management
-- Error handling
-
-### Visual Interaction
-The frontend provides:
-- Real-time 2D agent visualization
-- Interactive chat interfaces
-- Status monitoring
-- Speech bubbles and animations
-
-## 🚦 Agent Status Monitoring
-
-Monitor agent health through:
-- Frontend status panel
-- REST API endpoints
-- Agentverse dashboard
-- Log files
-
-## 🔐 Security Considerations
-
-- Never commit real API keys
-- Use environment variables
-- Implement rate limiting
-- Validate all inputs
-- Monitor for anomalies
-
-## 🤝 Contributing
-
-We welcome contributions! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
-## 📚 Documentation
-
-- [Fetch.ai Docs](https://docs.fetch.ai)
-- [uAgents Framework](https://github.com/fetchai/uAgents)
-- [OpenAI API](https://platform.openai.com/docs)
-- [OpenSea MCP](https://docs.opensea.io/docs/mcp)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Agents not connecting**: Check Agentverse API key
-2. **OpenAI errors**: Verify API key and rate limits
-3. **Frontend not loading**: Ensure all agents are running
-4. **WebSocket errors**: Check port availability
-
-## 📄 License
-
-MIT License - see LICENSE file for details
+### API Access
+- **OpenSea MCP**: Apply for beta access at [docs.opensea.io](https://docs.opensea.io/docs/mcp)
+- **OpenAI API**: Get your key at [platform.openai.com](https://platform.openai.com)
+- **Fetch.ai Agentverse**: Register at [agentverse.ai](https://agentverse.ai)
 
 ## 🙏 Acknowledgments
 
-- Fetch.ai team for the uAgents framework
-- OpenAI for GPT-4 integration
-- OpenSea for MCP access
-- Coinbase for AgentKit
-- The Web3 community
+This agent wouldn't be possible without:
 
-## 🚀 Future Roadmap
+- **Fetch.ai Team**: For the innovative uAgents framework and decentralized agent infrastructure
+- **OpenSea**: For providing MCP beta access and comprehensive NFT marketplace data
+- **OpenAI**: For GPT-4o's natural language capabilities
+- **Open Source Community**: For the amazing Python libraries that power this agent
 
-- [ ] Real blockchain deployment
-- [ ] Advanced agent learning
-- [ ] Cross-chain integration
-- [ ] Mobile app
-- [ ] DAO governance
-- [ ] Agent marketplace
+### Special Thanks
+- The Fetch.ai Innovation Lab for comprehensive documentation
+- Early beta testers who provided invaluable feedback
+- Contributors to the uAgents ecosystem
+
+## 🔮 Future Roadmap
+
+### Planned Features
+- Multi-marketplace support (Blur, Magic Eden, Rarible)
+- Advanced analytics (price predictions, anomaly detection)
+- Portfolio tracking and management
+- Automated trading strategies
+- WebSocket support for real-time updates
+
+### Community Contributions
+We welcome contributions! Areas where help is needed:
+- Additional MCP tool integrations
+- Response formatting improvements
+- Multi-language support
+- Performance optimizations
+- Documentation translations
 
 ---
 
-**Built with ❤️ for the decentralized future**
+**Built with ❤️ on the Fetch.ai Network**
 
-*"From one genesis agent, an entire universe emerges..."* - Etherius Mother
+*Empowering everyone with NFT market intelligence through decentralized AI*

@@ -20,6 +20,8 @@ agent = Agent(
     port=int(os.getenv("ETHERIUS_PORT", 8100)),
     endpoint=[f"http://localhost:{os.getenv('ETHERIUS_PORT', 8100)}/submit"],
     mailbox=True,
+    publish_agent_details=True,
+    readme_path = "README.md"
 )
 
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
