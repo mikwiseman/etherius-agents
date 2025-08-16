@@ -9,7 +9,9 @@ SEED_PHRASE = "mailbox282828"
 agent = Agent(
     name="mailbox282828",
     port=8028,
-    mailbox=True        
+    mailbox=True,
+    publish_agent_details=True,
+    readme_path = "README.md"        
 )
  
 # Copy the address shown below
