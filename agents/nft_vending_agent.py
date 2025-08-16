@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 import aiohttp
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
-import openai
+
+from openai import OpenAI
 
 load_dotenv()
 
@@ -28,7 +28,7 @@ agent = Agent(
 )
 
 # OpenAI configuration
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI()
 
 # NFT categories
 class NFTCategory(str, Enum):
@@ -43,62 +43,62 @@ class NFTCategory(str, Enum):
 
 # NFT model
 class NFT(Model):
-    token_id: str = Field(..., description="NFT token ID")
-    collection_name: str = Field(..., description="Collection name")
-    collection_address: str = Field(..., description="Collection contract address")
-    name: str = Field(..., description="NFT name")
-    description: str = Field(..., description="NFT description")
-    image_url: str = Field(..., description="NFT image URL")
-    category: NFTCategory = Field(..., description="NFT category")
-    price_eth: float = Field(..., description="Price in ETH")
-    price_usd: float = Field(..., description="Price in USD")
-    rarity_score: float = Field(default=0.5, description="Rarity score (0-1)")
-    traits: List[Dict[str, Any]] = Field(default_factory=list, description="NFT traits")
-    owner: str = Field(..., description="Current owner address")
-    blockchain: str = Field(default="ethereum", description="Blockchain network")
-    marketplace_url: str = Field(..., description="OpenSea listing URL")
+    token_id: str
+    collection_name: str
+    collection_address: str
+    name: str
+    description: str
+    image_url: str
+    category: NFTCategory
+    price_eth: float
+    price_usd: float
+    rarity_score: float
+    traits: List[Dict[str, Any]]
+    owner: str
+    blockchain: str
+    marketplace_url: str
 
 # Message models
 class NFTQuery(Model):
-    query: str = Field(..., description="Natural language query about NFTs")
-    category: Optional[NFTCategory] = Field(None, description="Category filter")
-    max_price_eth: Optional[float] = Field(None, description="Maximum price in ETH")
-    min_rarity: Optional[float] = Field(None, description="Minimum rarity score")
-    collection: Optional[str] = Field(None, description="Specific collection name")
+    query: str
+    category: Optional[NFTCategory]
+    max_price_eth: Optional[float]
+    min_rarity: Optional[float]
+    collection: Optional[str]
 
 class NFTResponse(Model):
-    nfts: List[NFT] = Field(..., description="Matching NFTs")
-    recommendation: str = Field(..., description="AI-generated recommendation")
-    market_insights: str = Field(..., description="Market insights")
-    total_items: int = Field(..., description="Total items found")
+    nfts: List[NFT]
+    recommendation: str
+    market_insights: str
+    total_items: int
 
 class NFTPurchaseRequest(Model):
-    token_id: str = Field(..., description="NFT token ID")
-    collection_address: str = Field(..., description="Collection contract address")
-    offer_price_eth: Optional[float] = Field(None, description="Offer price if negotiating")
-    payment_method: str = Field(default="x402", description="Payment method")
+    token_id: str
+    collection_address: str
+    offer_price_eth: Optional[float]
+    payment_method: str
 
 class NFTPurchaseResponse(Model):
-    success: bool = Field(..., description="Purchase success status")
-    nft: Optional[NFT] = Field(None, description="Purchased NFT")
-    final_price_eth: float = Field(..., description="Final price in ETH")
-    final_price_usd: float = Field(..., description="Final price in USD")
-    payment_url: str = Field(..., description="X402 payment URL")
-    transaction_hash: Optional[str] = Field(None, description="Blockchain transaction hash")
-    opensea_url: str = Field(..., description="OpenSea transaction URL")
-    message: str = Field(..., description="Response message")
+    success: bool
+    nft: Optional[NFT]
+    final_price_eth: float
+    final_price_usd: float
+    payment_url: str
+    transaction_hash: Optional[str]
+    opensea_url: str
+    message: str
 
 class MarketAnalysis(Model):
-    collection: str = Field(..., description="Collection to analyze")
-    timeframe: str = Field(default="7d", description="Analysis timeframe")
+    collection: str
+    timeframe: str
 
 class MarketAnalysisResponse(Model):
-    collection: str = Field(..., description="Collection name")
-    floor_price_eth: float = Field(..., description="Floor price in ETH")
-    volume_24h: float = Field(..., description="24h volume in ETH")
-    price_change_24h: float = Field(..., description="24h price change percentage")
-    trending_traits: List[str] = Field(..., description="Trending traits")
-    recommendation: str = Field(..., description="Investment recommendation")
+    collection: str
+    floor_price_eth: float
+    volume_24h: float
+    price_change_24h: float
+    trending_traits: List[str]
+    recommendation: str
 
 # OpenSea MCP client
 class OpenSeaMCPClient:
@@ -235,7 +235,7 @@ async def get_nft_recommendation(query: str, nfts: List[NFT]) -> str:
         Response in 2-3 sentences."""
         
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": "You are an expert NFT advisor."},
                 {"role": "user", "content": prompt}
@@ -389,7 +389,7 @@ async def handle_market_analysis(ctx: Context, sender: str, msg: MarketAnalysis)
         Provide investment recommendation in 2 sentences."""
         
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": "You are an NFT market analyst."},
                 {"role": "user", "content": prompt}

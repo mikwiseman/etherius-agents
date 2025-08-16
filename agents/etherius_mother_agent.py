@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
+
 import openai
 
 load_dotenv()
@@ -46,7 +46,7 @@ class AgentType(str, Enum):
 AGENT_TEMPLATES = {
     AgentType.SERVICE: """
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
+
 from datetime import datetime, UTC
 
 agent = Agent(
@@ -58,11 +58,11 @@ agent = Agent(
 )
 
 class RequestModel(Model):
-    query: str = Field(..., description="User query")
+    query: str
 
 class ResponseModel(Model):
-    result: str = Field(..., description="Service result")
-    timestamp: str = Field(..., description="Response timestamp")
+    result: str
+    timestamp: str
 
 protocol = Protocol(name="{name}_protocol", version="1.0")
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 """,
     AgentType.ANALYZER: """
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
+
 from typing import Dict, List, Any
 import random
 
@@ -101,13 +101,13 @@ agent = Agent(
 )
 
 class AnalysisRequest(Model):
-    target: str = Field(..., description="Analysis target")
-    depth: str = Field(default="standard", description="Analysis depth")
+    target: str
+    depth: str
 
 class AnalysisResult(Model):
-    metrics: Dict[str, Any] = Field(..., description="Analysis metrics")
-    insights: List[str] = Field(..., description="Key insights")
-    score: float = Field(..., description="Overall score")
+    metrics: Dict[str, Any]
+    insights: List[str]
+    score: float
 
 protocol = Protocol(name="{name}_protocol", version="1.0")
 
@@ -138,43 +138,43 @@ if __name__ == "__main__":
 
 # Models
 class AgentSpecification(Model):
-    name: str = Field(..., description="Agent name (snake_case)")
-    display_name: str = Field(..., description="Display name")
-    description: str = Field(..., description="Agent description")
-    agent_type: AgentType = Field(..., description="Agent type")
-    capabilities: List[str] = Field(..., description="Agent capabilities")
-    port: int = Field(..., description="Agent port")
-    custom_logic: str = Field(..., description="Custom business logic")
-    dependencies: List[str] = Field(default_factory=list, description="Python dependencies")
+    name: str
+    display_name: str
+    description: str
+    agent_type: AgentType
+    capabilities: List[str]
+    port: int
+    custom_logic: str
+    dependencies: List[str]
 
 class CreationRequest(Model):
-    description: str = Field(..., description="Natural language description")
-    agent_type: Optional[AgentType] = Field(None, description="Preferred agent type")
-    capabilities: Optional[List[str]] = Field(None, description="Required capabilities")
-    auto_deploy: bool = Field(default=False, description="Auto-deploy after creation")
+    description: str
+    agent_type: Optional[AgentType]
+    capabilities: Optional[List[str]]
+    auto_deploy: bool
 
 class CreationResponse(Model):
-    success: bool = Field(..., description="Creation success")
-    agent_spec: Optional[AgentSpecification] = Field(None, description="Created agent spec")
-    file_path: Optional[str] = Field(None, description="Agent file path")
-    agent_address: Optional[str] = Field(None, description="Agent address")
-    deployment_status: str = Field(..., description="Deployment status")
-    message: str = Field(..., description="Response message")
+    success: bool
+    agent_spec: Optional[AgentSpecification]
+    file_path: Optional[str]
+    agent_address: Optional[str]
+    deployment_status: str
+    message: str
 
 class AgentListRequest(Model):
-    include_status: bool = Field(default=True, description="Include online status")
-    filter_type: Optional[AgentType] = Field(None, description="Filter by type")
+    include_status: bool
+    filter_type: Optional[AgentType]
 
 class AgentListResponse(Model):
-    agents: List[Dict[str, Any]] = Field(..., description="List of agents")
-    total_count: int = Field(..., description="Total agent count")
-    online_count: int = Field(..., description="Online agent count")
+    agents: List[Dict[str, Any]]
+    total_count: int
+    online_count: int
 
 class AgentUpdateRequest(Model):
-    agent_name: str = Field(..., description="Agent to update")
-    new_logic: Optional[str] = Field(None, description="New business logic")
-    new_capabilities: Optional[List[str]] = Field(None, description="New capabilities")
-    restart: bool = Field(default=True, description="Restart after update")
+    agent_name: str
+    new_logic: Optional[str]
+    new_capabilities: Optional[List[str]]
+    restart: bool
 
 # Agent Generator
 class AgentGenerator:

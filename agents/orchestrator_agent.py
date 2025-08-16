@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 import asyncio
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
 import openai
 
 load_dotenv()
@@ -68,38 +67,38 @@ class RequestType(str, Enum):
 
 # Models
 class UserRequest(Model):
-    query: str = Field(..., description="User's natural language request")
-    context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
-    preferred_agent: Optional[str] = Field(None, description="Preferred agent if specified")
-    session_id: str = Field(..., description="Session identifier")
+    query: str
+    context: Optional[Dict[str, Any]]
+    preferred_agent: Optional[str]
+    session_id: str
 
 class RoutingDecision(Model):
-    primary_agent: str = Field(..., description="Primary agent to handle request")
-    secondary_agents: List[str] = Field(default_factory=list, description="Supporting agents")
-    request_type: RequestType = Field(..., description="Classified request type")
-    confidence: float = Field(..., description="Routing confidence (0-1)")
-    reasoning: str = Field(..., description="Routing reasoning")
+    primary_agent: str
+    secondary_agents: List[str]
+    request_type: RequestType
+    confidence: float
+    reasoning: str
 
 class OrchestratedResponse(Model):
-    session_id: str = Field(..., description="Session ID")
-    primary_response: Dict[str, Any] = Field(..., description="Primary agent response")
-    supporting_responses: List[Dict[str, Any]] = Field(default_factory=list, description="Supporting responses")
-    summary: str = Field(..., description="Orchestrated summary")
-    suggestions: List[str] = Field(..., description="Follow-up suggestions")
-    agents_used: List[str] = Field(..., description="Agents that contributed")
+    session_id: str
+    primary_response: Dict[str, Any]
+    supporting_responses: List[Dict[str, Any]]
+    summary: str
+    suggestions: List[str]
+    agents_used: List[str]
 
 class AgentStatus(Model):
-    agent_name: str = Field(..., description="Agent name")
-    is_online: bool = Field(..., description="Online status")
-    last_seen: str = Field(..., description="Last activity timestamp")
-    current_load: int = Field(..., description="Current request load")
-    capabilities: List[str] = Field(..., description="Agent capabilities")
+    agent_name: str
+    is_online: bool
+    last_seen: str
+    current_load: int
+    capabilities: List[str]
 
 class SystemStatus(Model):
-    total_agents: int = Field(..., description="Total registered agents")
-    online_agents: int = Field(..., description="Currently online agents")
-    agents: List[AgentStatus] = Field(..., description="Individual agent statuses")
-    system_health: str = Field(..., description="Overall system health")
+    total_agents: int
+    online_agents: int
+    agents: List[AgentStatus]
+    system_health: str
 
 # Request Router
 class IntelligentRouter:

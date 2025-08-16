@@ -12,7 +12,7 @@ from enum import Enum
 from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
+
 import openai
 
 load_dotenv()
@@ -50,55 +50,55 @@ class BlockchainNetwork(str, Enum):
 
 # Data models
 class MemecoinSpec(Model):
-    name: str = Field(..., description="Token name")
-    symbol: str = Field(..., description="Token symbol (3-5 chars)")
-    description: str = Field(..., description="Token description")
-    theme: MemecoinTheme = Field(..., description="Memecoin theme")
-    total_supply: int = Field(..., description="Total token supply")
-    decimals: int = Field(default=18, description="Token decimals")
-    logo_prompt: str = Field(..., description="Logo generation prompt")
-    website_content: str = Field(..., description="Website content")
-    tokenomics: Dict[str, float] = Field(..., description="Token distribution")
+    name: str
+    symbol: str
+    description: str
+    theme: MemecoinTheme
+    total_supply: int
+    decimals: int
+    logo_prompt: str
+    website_content: str
+    tokenomics: Dict[str, float]
 
 class GenerationRequest(Model):
-    theme: MemecoinTheme = Field(..., description="Desired theme")
-    keywords: List[str] = Field(default_factory=list, description="Keywords to include")
-    network: BlockchainNetwork = Field(default=BlockchainNetwork.BASE, description="Deployment network")
-    max_supply: Optional[int] = Field(None, description="Maximum token supply")
-    ai_enhanced: bool = Field(default=True, description="Use AI for generation")
+    theme: MemecoinTheme
+    keywords: List[str]
+    network: BlockchainNetwork
+    max_supply: Optional[int]
+    ai_enhanced: bool
 
 class GenerationResponse(Model):
-    success: bool = Field(..., description="Generation success")
-    memecoin: Optional[MemecoinSpec] = Field(None, description="Generated memecoin")
-    contract_address: Optional[str] = Field(None, description="Deployed contract address")
-    deployment_tx: Optional[str] = Field(None, description="Deployment transaction")
-    logo_url: Optional[str] = Field(None, description="Generated logo URL")
-    website_url: Optional[str] = Field(None, description="Generated website URL")
-    liquidity_pool: Optional[str] = Field(None, description="Liquidity pool address")
-    message: str = Field(..., description="Response message")
+    success: bool
+    memecoin: Optional[MemecoinSpec]
+    contract_address: Optional[str]
+    deployment_tx: Optional[str]
+    logo_url: Optional[str]
+    website_url: Optional[str]
+    liquidity_pool: Optional[str]
+    message: str
 
 class DeploymentRequest(Model):
-    memecoin_spec: MemecoinSpec = Field(..., description="Memecoin specification")
-    network: BlockchainNetwork = Field(..., description="Target network")
-    initial_liquidity_eth: float = Field(default=0.1, description="Initial liquidity in ETH")
-    lock_liquidity: bool = Field(default=True, description="Lock liquidity")
-    enable_trading: bool = Field(default=True, description="Enable trading immediately")
+    memecoin_spec: MemecoinSpec
+    network: BlockchainNetwork
+    initial_liquidity_eth: float
+    lock_liquidity: bool
+    enable_trading: bool
 
 class DeploymentResponse(Model):
-    success: bool = Field(..., description="Deployment success")
-    contract_address: str = Field(..., description="Contract address")
-    transaction_hash: str = Field(..., description="Transaction hash")
-    liquidity_pool_address: str = Field(..., description="LP address")
-    explorer_url: str = Field(..., description="Block explorer URL")
-    dex_url: str = Field(..., description="DEX trading URL")
-    total_cost_eth: float = Field(..., description="Total deployment cost")
+    success: bool
+    contract_address: str
+    transaction_hash: str
+    liquidity_pool_address: str
+    explorer_url: str
+    dex_url: str
+    total_cost_eth: float
 
 class MarketingPackage(Model):
-    memecoin_address: str = Field(..., description="Token contract address")
-    social_posts: List[str] = Field(..., description="Social media posts")
-    telegram_group: str = Field(..., description="Telegram group link")
-    twitter_account: str = Field(..., description="Twitter account")
-    marketing_strategy: str = Field(..., description="Marketing strategy")
+    memecoin_address: str
+    social_posts: List[str]
+    telegram_group: str
+    twitter_account: str
+    marketing_strategy: str
 
 # Memecoin Generator Engine
 class MemecoinGenerator:

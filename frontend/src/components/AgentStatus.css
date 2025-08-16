@@ -1,0 +1,120 @@
+.agent-status {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-status h2 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.25rem;
+}
+
+.agent-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.agent-card {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #f5f5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.agent-card:hover {
+  background: #e8e8e8;
+  transform: translateX(5px);
+}
+
+.agent-card.selected {
+  background: #667eea;
+  color: white;
+}
+
+.agent-icon {
+  font-size: 2rem;
+  margin-right: 1rem;
+}
+
+.agent-info {
+  flex: 1;
+}
+
+.agent-info h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+}
+
+.agent-card.selected .agent-info h4 {
+  color: white;
+}
+
+.agent-type {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.agent-capabilities {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.capability-tag {
+  padding: 0.2rem 0.5rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  font-size: 0.7rem;
+}
+
+.agent-card.selected .capability-tag {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.agent-status-indicator {
+  font-size: 0.8rem;
+}
+
+.agent-status-indicator.online {
+  color: #4caf50;
+}
+
+.agent-status-indicator.offline {
+  color: #f44336;
+}
+
+.system-stats {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.system-stats h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #666;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.stat span {
+  color: #666;
+}
+
+.stat strong {
+  color: #333;
+}
+
+.health-good {
+  color: #4caf50 !important;
+}

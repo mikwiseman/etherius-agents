@@ -12,8 +12,8 @@ from enum import Enum
 from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
 from openai import OpenAI
+from x402_handler import payment_handler, PaymentStatus
 
 load_dotenv()
 
@@ -39,45 +39,58 @@ class ProductCategory(str, Enum):
 
 # Product inventory with dynamic pricing
 class Product(Model):
-    id: str = Field(..., description="Product ID")
-    name: str = Field(..., description="Product name")
-    category: ProductCategory = Field(..., description="Product category")
-    price: float = Field(..., description="Current price")
-    base_price: float = Field(..., description="Base price")
-    quantity: int = Field(..., description="Available quantity")
-    description: str = Field(..., description="Product description")
-    calories: int = Field(default=0, description="Calorie count")
-    allergens: List[str] = Field(default_factory=list, description="Allergen information")
-    popularity_score: float = Field(default=0.5, description="Popularity score for pricing")
+    id: str
+    name: str
+    category: ProductCategory
+    price: float
+    base_price: float
+    quantity: int
+    description: str
+    calories: int
+    allergens: List[str]
+    popularity_score: float
 
 # Message models
 class ProductQuery(Model):
-    query: str = Field(..., description="Natural language query about products")
-    category: Optional[ProductCategory] = Field(None, description="Specific category filter")
-    max_price: Optional[float] = Field(None, description="Maximum price filter")
+    query: str
+    category: Optional[ProductCategory]
+    max_price: Optional[float]
 
 class ProductResponse(Model):
-    products: List[Product] = Field(..., description="Matching products")
-    recommendation: str = Field(..., description="AI-generated recommendation")
-    total_items: int = Field(..., description="Total items found")
+    products: List[Product]
+    recommendation: str
+    total_items: int
 
 class PurchaseRequest(Model):
-    product_id: str = Field(..., description="Product ID to purchase")
-    quantity: int = Field(default=1, description="Quantity to purchase")
-    payment_method: str = Field(default="x402", description="Payment method")
+    product_id: str
+    quantity: int
+    payment_method: str
 
 class PurchaseResponse(Model):
-    success: bool = Field(..., description="Purchase success status")
-    product: Optional[Product] = Field(None, description="Purchased product")
-    total_price: float = Field(..., description="Total price")
-    payment_url: Optional[str] = Field(None, description="X402 payment URL")
-    transaction_id: str = Field(..., description="Transaction ID")
-    message: str = Field(..., description="Response message")
+    success: bool
+    product: Optional[Product]
+    total_price: float
+    payment_url: Optional[str]
+    payment_id: str
+    transaction_id: Optional[str]
+    payment_status: str
+    message: str
 
 class InventoryUpdate(Model):
-    product_id: str = Field(..., description="Product ID")
-    quantity_change: int = Field(..., description="Quantity change (positive for restock)")
-    new_price: Optional[float] = Field(None, description="New price if updating")
+    product_id: str
+    quantity_change: int
+    new_price: Optional[float]
+
+class PaymentVerification(Model):
+    payment_id: str
+    transaction_hash: Optional[str]
+
+class PaymentVerificationResponse(Model):
+    payment_id: str
+    verified: bool
+    status: str
+    transaction_hash: Optional[str]
+    message: str
 
 # Initialize inventory
 INVENTORY: Dict[str, Product] = {
@@ -90,7 +103,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=20,
         description="Classic Coca-Cola, refreshing carbonated beverage",
         calories=140,
-        allergens=[]
+        allergens=[],
+        popularity_score=0.5
     ),
     "DRINK002": Product(
         id="DRINK002",
@@ -101,7 +115,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=15,
         description="Premium vapor-distilled water with electrolytes",
         calories=0,
-        allergens=[]
+        allergens=[],
+        popularity_score=0.5
     ),
     "SNACK001": Product(
         id="SNACK001",
@@ -112,7 +127,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=25,
         description="Bold nacho cheese flavored tortilla chips",
         calories=250,
-        allergens=["dairy", "corn"]
+        allergens=["dairy", "corn"],
+        popularity_score=0.5
     ),
     "SNACK002": Product(
         id="SNACK002",
@@ -123,7 +139,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=18,
         description="Stackable potato crisps with classic flavor",
         calories=150,
-        allergens=["wheat"]
+        allergens=["wheat"],
+        popularity_score=0.5
     ),
     "CANDY001": Product(
         id="CANDY001",
@@ -134,7 +151,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=30,
         description="Chocolate bar with peanuts, caramel, and nougat",
         calories=280,
-        allergens=["peanuts", "dairy", "soy"]
+        allergens=["peanuts", "dairy", "soy"],
+        popularity_score=0.5
     ),
     "HEALTHY001": Product(
         id="HEALTHY001",
@@ -145,7 +163,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=12,
         description="Healthy nut bar with almonds and coconut",
         calories=200,
-        allergens=["tree nuts", "coconut"]
+        allergens=["tree nuts", "coconut"],
+        popularity_score=0.5
     ),
     "SPECIAL001": Product(
         id="SPECIAL001",
@@ -156,7 +175,8 @@ INVENTORY: Dict[str, Product] = {
         quantity=5,
         description="Exclusive AI-recommended energy boost",
         calories=110,
-        allergens=[]
+        allergens=[],
+        popularity_score=0.5
     )
 }
 
@@ -241,6 +261,8 @@ async def startup(ctx: Context):
     ctx.logger.info(f"📍 Address: {agent.address}")
     ctx.logger.info(f"📦 Products loaded: {len(INVENTORY)}")
     ctx.logger.info(f"🤖 OpenAI integration: {'✅' if os.getenv('OPENAI_API_KEY') else '❌'}")
+    ctx.logger.info(f"💳 X402 payments: {'✅ Wallet: ' + payment_handler.wallet_address[:10] + '...' if payment_handler.wallet_address and payment_handler.wallet_address != '0x0000000000000000000000000000000000000000' else '❌ Not configured'}")
+    ctx.logger.info(f"🌐 Payment network: {payment_handler.network}")
 
 @agent.on_event("shutdown")
 async def shutdown(ctx: Context):
@@ -319,26 +341,93 @@ async def handle_purchase(ctx: Context, sender: str, msg: PurchaseRequest):
     unit_price = pricer.calculate_price(product, msg.quantity)
     total_price = unit_price * msg.quantity
     
-    # Process payment (simulated X402 integration)
-    payment_url = f"https://x402.pay/vending/{msg.product_id}?amount={total_price}&qty={msg.quantity}"
+    # Create X402 payment request
+    payment_request = payment_handler.create_payment_request(
+        product_id=msg.product_id,
+        amount_usd=total_price,
+        description=f"Purchase: {product.name} x{msg.quantity}",
+        metadata={
+            "product_name": product.name,
+            "quantity": msg.quantity,
+            "unit_price": unit_price,
+            "buyer": sender
+        }
+    )
     
-    # Update inventory
-    product.quantity -= msg.quantity
-    pricer.update_popularity(msg.product_id, True)
+    # Generate payment URL
+    payment_url = payment_handler.generate_payment_url(payment_request)
     
-    # Log transaction
-    transaction_id = f"TXN_{int(datetime.now(UTC).timestamp())}_{random.randint(1000, 9999)}"
+    # Store payment details in context for later verification
+    ctx.storage.set(f"payment_{payment_request['payment_id']}", {
+        "product_id": msg.product_id,
+        "quantity": msg.quantity,
+        "sender": sender
+    })
     
     await ctx.send(sender, PurchaseResponse(
         success=True,
         product=product,
         total_price=total_price,
         payment_url=payment_url,
-        transaction_id=transaction_id,
-        message=f"Purchase successful! Unit price: ${unit_price} (dynamic pricing applied)"
+        payment_id=payment_request["payment_id"],
+        transaction_id=None,  # Will be set after payment confirmation
+        payment_status=PaymentStatus.PENDING,
+        message=f"Payment request created. Unit price: ${unit_price}. Please complete payment at the provided URL."
     ))
     
     ctx.logger.info(f"✅ Sale completed: {product.name} x{msg.quantity} for ${total_price}")
+
+@vending_protocol.on_message(model=PaymentVerification, replies=PaymentVerificationResponse)
+async def handle_payment_verification(ctx: Context, sender: str, msg: PaymentVerification):
+    """Verify X402 payment and complete purchase"""
+    ctx.logger.info(f"💳 Verifying payment {msg.payment_id} from {sender}")
+    
+    # Verify payment through X402
+    verified, payment_details = await payment_handler.verify_payment(
+        msg.payment_id,
+        msg.transaction_hash
+    )
+    
+    if verified:
+        # Get stored purchase details
+        purchase_data = ctx.storage.get(f"payment_{msg.payment_id}")
+        
+        if purchase_data and purchase_data["product_id"] in INVENTORY:
+            product = INVENTORY[purchase_data["product_id"]]
+            quantity = purchase_data["quantity"]
+            
+            # Update inventory after successful payment
+            product.quantity -= quantity
+            pricer.update_popularity(purchase_data["product_id"], True)
+            
+            ctx.logger.info(f"✅ Payment verified! Completed sale: {product.name} x{quantity}")
+            
+            await ctx.send(sender, PaymentVerificationResponse(
+                payment_id=msg.payment_id,
+                verified=True,
+                status=PaymentStatus.COMPLETED,
+                transaction_hash=payment_details.get("transaction_hash"),
+                message=f"Payment confirmed! Your {product.name} has been dispensed."
+            ))
+        else:
+            await ctx.send(sender, PaymentVerificationResponse(
+                payment_id=msg.payment_id,
+                verified=True,
+                status=PaymentStatus.COMPLETED,
+                transaction_hash=payment_details.get("transaction_hash"),
+                message="Payment verified but purchase data not found."
+            ))
+    else:
+        error_msg = payment_details.get("error", "Payment verification failed")
+        status = payment_details.get("payment", {}).get("status", PaymentStatus.FAILED)
+        
+        await ctx.send(sender, PaymentVerificationResponse(
+            payment_id=msg.payment_id,
+            verified=False,
+            status=status,
+            transaction_hash=None,
+            message=f"Payment not verified: {error_msg}"
+        ))
 
 @vending_protocol.on_message(model=InventoryUpdate)
 async def handle_inventory_update(ctx: Context, sender: str, msg: InventoryUpdate):

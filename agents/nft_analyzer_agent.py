@@ -13,8 +13,8 @@ import asyncio
 from collections import defaultdict
 
 from uagents import Agent, Context, Model, Protocol
-from pydantic import Field
-import openai
+
+from openai import OpenAI
 
 load_dotenv()
 
@@ -28,7 +28,7 @@ agent = Agent(
 )
 
 # OpenAI configuration
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI()
 
 # Analysis types
 class AnalysisType(str, Enum):
@@ -41,74 +41,74 @@ class AnalysisType(str, Enum):
 
 # Data models
 class CollectionMetrics(Model):
-    name: str = Field(..., description="Collection name")
-    floor_price: float = Field(..., description="Floor price in ETH")
-    market_cap: float = Field(..., description="Market cap in ETH")
-    volume_24h: float = Field(..., description="24h volume")
-    volume_7d: float = Field(..., description="7d volume")
-    holders: int = Field(..., description="Number of unique holders")
-    supply: int = Field(..., description="Total supply")
-    listed_percentage: float = Field(..., description="Percentage listed")
-    avg_price: float = Field(..., description="Average price")
-    price_change_24h: float = Field(..., description="24h price change %")
-    price_change_7d: float = Field(..., description="7d price change %")
+    name: str
+    floor_price: float
+    market_cap: float
+    volume_24h: float
+    volume_7d: float
+    holders: int
+    supply: int
+    listed_percentage: float
+    avg_price: float
+    price_change_24h: float
+    price_change_7d: float
 
 class TraitAnalysis(Model):
-    trait_type: str = Field(..., description="Trait category")
-    trait_value: str = Field(..., description="Trait value")
-    rarity_percentage: float = Field(..., description="Rarity percentage")
-    floor_price: float = Field(..., description="Trait floor price")
-    premium_percentage: float = Field(..., description="Price premium over collection floor")
-    holder_distribution: Dict[str, int] = Field(..., description="Distribution of holders")
+    trait_type: str
+    trait_value: str
+    rarity_percentage: float
+    floor_price: float
+    premium_percentage: float
+    holder_distribution: Dict[str, int]
 
 class TrendData(Model):
-    trending_collections: List[str] = Field(..., description="Trending collections")
-    hot_traits: List[TraitAnalysis] = Field(..., description="Hot traits across collections")
-    emerging_artists: List[str] = Field(..., description="Emerging artists")
-    market_sentiment: str = Field(..., description="Overall market sentiment")
-    volume_trends: Dict[str, float] = Field(..., description="Volume trends by category")
+    trending_collections: List[str]
+    hot_traits: List[TraitAnalysis]
+    emerging_artists: List[str]
+    market_sentiment: str
+    volume_trends: Dict[str, float]
 
 # Request/Response models
 class AnalysisRequest(Model):
-    analysis_type: AnalysisType = Field(..., description="Type of analysis")
-    target: str = Field(..., description="Target (collection, wallet, trait)")
-    timeframe: str = Field(default="7d", description="Analysis timeframe")
-    depth: str = Field(default="standard", description="Analysis depth: basic, standard, deep")
+    analysis_type: AnalysisType
+    target: str
+    timeframe: str
+    depth: str
 
 class AnalysisResponse(Model):
-    analysis_type: AnalysisType = Field(..., description="Type of analysis performed")
-    target: str = Field(..., description="Analysis target")
-    metrics: Dict[str, Any] = Field(..., description="Analysis metrics")
-    insights: List[str] = Field(..., description="Key insights")
-    recommendations: List[str] = Field(..., description="Action recommendations")
-    risk_score: float = Field(..., description="Risk score (0-10)")
-    opportunity_score: float = Field(..., description="Opportunity score (0-10)")
-    ai_summary: str = Field(..., description="AI-generated summary")
-    timestamp: str = Field(..., description="Analysis timestamp")
+    analysis_type: AnalysisType
+    target: str
+    metrics: Dict[str, Any]
+    insights: List[str]
+    recommendations: List[str]
+    risk_score: float
+    opportunity_score: float
+    ai_summary: str
+    timestamp: str
 
 class ComparisonRequest(Model):
-    collections: List[str] = Field(..., description="Collections to compare")
-    metrics: List[str] = Field(default=["floor_price", "volume", "holders"], description="Metrics to compare")
+    collections: List[str]
+    metrics: List[str]
 
 class ComparisonResponse(Model):
-    collections: List[CollectionMetrics] = Field(..., description="Collection metrics")
-    comparison_chart: Dict[str, Dict[str, float]] = Field(..., description="Comparison data")
-    winner: str = Field(..., description="Best performing collection")
-    insights: str = Field(..., description="Comparison insights")
+    collections: List[CollectionMetrics]
+    comparison_chart: Dict[str, Dict[str, float]]
+    winner: str
+    insights: str
 
 class PredictionRequest(Model):
-    collection: str = Field(..., description="Collection to predict")
-    timeframe: str = Field(default="30d", description="Prediction timeframe")
-    factors: List[str] = Field(default=["market", "social", "utility"], description="Factors to consider")
+    collection: str
+    timeframe: str
+    factors: List[str]
 
 class PredictionResponse(Model):
-    collection: str = Field(..., description="Collection name")
-    current_floor: float = Field(..., description="Current floor price")
-    predicted_floor: float = Field(..., description="Predicted floor price")
-    confidence: float = Field(..., description="Prediction confidence (0-1)")
-    bullish_factors: List[str] = Field(..., description="Bullish factors")
-    bearish_factors: List[str] = Field(..., description="Bearish factors")
-    recommendation: str = Field(..., description="Investment recommendation")
+    collection: str
+    current_floor: float
+    predicted_floor: float
+    confidence: float
+    bullish_factors: List[str]
+    bearish_factors: List[str]
+    recommendation: str
 
 # NFT Market Analyzer
 class NFTMarketAnalyzer:
@@ -189,7 +189,7 @@ class NFTMarketAnalyzer:
             prompt = f"Analyze social sentiment for NFT collection '{collection}' and provide a score 0-10 and one-word sentiment."
             
             response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4.1",
                 messages=[
                     {"role": "system", "content": "You are an NFT social sentiment analyzer. Respond with JSON."},
                     {"role": "user", "content": prompt}
@@ -280,7 +280,7 @@ async def generate_ai_insights(analysis_data: Dict[str, Any], analysis_type: str
         Provide 3 key actionable insights in 2-3 sentences total."""
         
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": "You are an expert NFT market analyst."},
                 {"role": "user", "content": prompt}

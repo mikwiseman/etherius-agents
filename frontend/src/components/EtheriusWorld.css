@@ -1,0 +1,39 @@
+.etherius-world {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.etherius-world canvas {
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  cursor: default;
+}
+
+.agent-tooltip {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.agent-tooltip h3 {
+  margin: 0 0 5px 0;
+  font-size: 1rem;
+}
+
+.agent-tooltip p {
+  margin: 3px 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
