@@ -305,9 +305,9 @@
             direction: 1,
             width: 120,  // Will be recalculated based on video size
             height: 180, // Will be recalculated based on video size (1.5x width for 2:3 ratio)
-            baseWidth: 0.08, // 8% of video width
-            baseHeight: 0.12, // 12% of video width (1.5x width for proper aspect ratio)
-            relativeX: 0.35, // Fixed at 35% across the video width
+            baseWidth: 0.12, // 12% of video width (increased by 1.5x from 0.08)
+            baseHeight: 0.18, // 18% of video width (1.5x width for proper aspect ratio)
+            relativeX: 0.25, // Fixed at 25% across the video width (left side)
             image: null
         };
         
@@ -316,6 +316,30 @@
         characterImage.src = 'katrik.png';
         characterImage.onload = () => {
             character.image = characterImage;
+        };
+        
+        // Second character with vitalik.png
+        let character2 = {
+            x: 400,
+            y: 0,
+            targetX: 400,
+            targetY: 0,
+            speed: 2,
+            state: 'idle',
+            direction: 1,
+            width: 120,  // Will be recalculated based on video size
+            height: 180, // Will be recalculated based on video size
+            baseWidth: 0.12, // Same as first character
+            baseHeight: 0.18, // Same as first character
+            relativeX: 0.75, // Fixed at 75% across the video width (right side)
+            image: null
+        };
+        
+        // Load second character image
+        const character2Image = new Image();
+        character2Image.src = 'vitalik.png';
+        character2Image.onload = () => {
+            character2.image = character2Image;
         };
         
         let vendingMachine = {
@@ -338,11 +362,6 @@
         vendingMachineImage.onload = () => {
             vendingMachine.image = vendingMachineImage;
         };
-
-        let npcs = [
-            { x: 100, y: 0, speed: 0.5, direction: 1, width: 25, height: 45 },
-            { x: 700, y: 0, speed: 0.3, direction: -1, width: 25, height: 45 }
-        ];
 
         let speechBubbles = [];
         
@@ -393,7 +412,7 @@
             }
             
             // Set ground level (bottom of the video area)
-            groundLevel = sceneHeight - 50;
+            groundLevel = sceneHeight + 20;  // Moved further down
             
             // Scale and position character relative to video size (like vending machine)
             character.width = videoWidth * character.baseWidth;
@@ -403,6 +422,14 @@
             character.targetY = groundLevel;
             character.targetX = character.x;
             
+            // Scale and position second character (vitalik)
+            character2.width = videoWidth * character2.baseWidth;
+            character2.height = character2.width * 1.5; // Same aspect ratio
+            character2.x = videoOffsetX + (videoWidth * character2.relativeX);
+            character2.y = groundLevel;  // Same Y position
+            character2.targetY = groundLevel;
+            character2.targetX = character2.x;
+            
             // Scale and position vending machine at fixed relative position in video
             vendingMachine.width = videoWidth * vendingMachine.baseWidth;
             vendingMachine.height = videoWidth * vendingMachine.baseHeight; // Keep square aspect ratio
@@ -410,10 +437,6 @@
             vendingMachine.x = videoOffsetX + (videoWidth * vendingMachine.relativeX);
             vendingMachine.y = videoOffsetY + (videoHeight * vendingMachine.relativeY);
             
-            // Position NPCs within video bounds
-            npcs[0].x = videoOffsetX + videoWidth * 0.2;
-            npcs[1].x = videoOffsetX + videoWidth * 0.8;
-            npcs.forEach(npc => npc.y = groundLevel);
         }
 
         // Draw simple ground line
@@ -462,6 +485,7 @@
 
         // Draw character sprite
         function drawCharacter() {
+            // Draw first character (katrik)
             const { x, y, width, height, image } = character;
             
             // Shadow
@@ -477,32 +501,25 @@
                 ctx.fillStyle = 'rgba(108, 92, 231, 0.9)';
                 ctx.fillRect(x - width/2, y - height, width, height);
             }
+            
+            // Draw second character (vitalik)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.ellipse(character2.x, character2.y + 5, character2.width/3, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            if (character2.image) {
+                ctx.drawImage(character2.image, character2.x - character2.width/2, character2.y - character2.height, character2.width, character2.height);
+            } else {
+                // Fallback: simple character if image not loaded
+                ctx.fillStyle = 'rgba(92, 108, 231, 0.9)';
+                ctx.fillRect(character2.x - character2.width/2, character2.y - character2.height, character2.width, character2.height);
+            }
         }
 
-        // Draw NPCs
-        function drawNPCs() {
-            npcs.forEach(npc => {
-                // Shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.ellipse(npc.x, npc.y + npc.height/2, npc.width/2, 4, 0, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Simple NPC with transparency
-                ctx.fillStyle = 'rgba(149, 165, 166, 0.8)';
-                ctx.beginPath();
-                ctx.arc(npc.x, npc.y - npc.height + 12, 12, 0, Math.PI * 2);
-                ctx.fill();
-                
-                ctx.fillRect(npc.x - npc.width/2, npc.y - npc.height + 24, npc.width, npc.height - 15);
-                
-                ctx.fillStyle = 'rgba(52, 73, 94, 0.8)';
-                ctx.fillRect(npc.x - npc.width/2 + 2, npc.y + 7, npc.width/2 - 2, 12);
-                ctx.fillRect(npc.x + 1, npc.y + 7, npc.width/2 - 2, 12);
-            });
-        }
 
         // Update character position
         function updateCharacter() {
+            // Update first character
             const dx = character.targetX - character.x;
             const dy = character.targetY - character.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -515,35 +532,46 @@
                 character.state = character.state === 'talking' ? 'talking' : 'idle';
             }
             
-            // Random idle movement within video bounds
+            // Random idle movement on LEFT HALF only
             if (character.state === 'idle' && Math.random() < 0.01) {
-                const minX = videoOffsetX + 50;
-                const maxX = videoOffsetX + videoWidth - 50;
+                const minX = videoOffsetX + character.width/2;
+                const maxX = videoOffsetX + (videoWidth * 0.5); // Only up to middle
                 character.targetX = minX + Math.random() * (maxX - minX);
             }
             
-            // Keep character within video bounds
-            const minBound = videoOffsetX + 50;
-            const maxBound = videoOffsetX + videoWidth - 50;
+            // Keep character on LEFT HALF
+            const minBound = videoOffsetX + character.width/2;
+            const maxBound = videoOffsetX + (videoWidth * 0.5); // Only up to middle
             character.x = Math.max(minBound, Math.min(maxBound, character.x));
             character.targetX = Math.max(minBound, Math.min(maxBound, character.targetX));
+            
+            // Update second character (vitalik) - similar logic
+            const dx2 = character2.targetX - character2.x;
+            const dy2 = character2.targetY - character2.y;
+            const distance2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+            
+            if (distance2 > 2) {
+                character2.x += (dx2 / distance2) * character2.speed;
+                character2.y += (dy2 / distance2) * character2.speed;
+                character2.state = 'walking';
+            } else {
+                character2.state = character2.state === 'talking' ? 'talking' : 'idle';
+            }
+            
+            // Random idle movement for character2 on RIGHT HALF only
+            if (character2.state === 'idle' && Math.random() < 0.01) {
+                const minX = videoOffsetX + (videoWidth * 0.5); // Start from middle
+                const maxX = videoOffsetX + videoWidth - character2.width/2;
+                character2.targetX = minX + Math.random() * (maxX - minX);
+            }
+            
+            // Keep character2 on RIGHT HALF
+            const minBound2 = videoOffsetX + (videoWidth * 0.5); // Start from middle
+            const maxBound2 = videoOffsetX + videoWidth - character2.width/2;
+            character2.x = Math.max(minBound2, Math.min(maxBound2, character2.x));
+            character2.targetX = Math.max(minBound2, Math.min(maxBound2, character2.targetX));
         }
 
-        // Update NPCs
-        function updateNPCs() {
-            npcs.forEach(npc => {
-                npc.x += npc.speed * npc.direction;
-                
-                // Keep NPCs within video bounds
-                const minBound = videoOffsetX + 50;
-                const maxBound = videoOffsetX + videoWidth - 50;
-                
-                if (npc.x < minBound || npc.x > maxBound) {
-                    npc.direction *= -1;
-                    npc.x = Math.max(minBound, Math.min(maxBound, npc.x));
-                }
-            });
-        }
 
         // Add speech bubble
         function addSpeechBubble(text, isUser) {
@@ -632,13 +660,11 @@
             // Draw scene elements on top of video
             drawGround();
             drawVendingMachine();
-            drawNPCs();
             drawCharacter();
             drawSpeechBubbles();
             
             // Update
             updateCharacter();
-            updateNPCs();
             updateSpeechBubbles();
             
             // Update vending machine glow
