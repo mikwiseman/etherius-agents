@@ -349,7 +349,7 @@
             height: 200, // Will be recalculated based on video size
             baseWidth: 0.15, // 15% of video width
             baseHeight: 0.15, // 15% of video width (keep aspect ratio)
-            relativeX: 0.6, // Fixed at 60% across the video width
+            relativeX: 0.8, // Fixed at 60% across the video width
             relativeY: 0.458, // Fixed at 50% down the video height (moved up)
             glowing: false,
             glowIntensity: 0,
@@ -361,6 +361,26 @@
         vendingMachineImage.src = 'eth.png';
         vendingMachineImage.onload = () => {
             vendingMachine.image = vendingMachineImage;
+        };
+        
+        // Screen object (left side)
+        let screenDisplay = {
+            x: 200,
+            y: 0,
+            width: 200,  // Will be recalculated based on video size
+            height: 200, // Will be recalculated based on video size
+            baseWidth: 0.15, // 15% of video width (same as vending machine)
+            baseHeight: 0.15, // 15% of video width (keep aspect ratio)
+            relativeX: 0.1, // Fixed at 20% across the video width (left side)
+            relativeY: 0.47, // Lower on Y axis than vending machine
+            image: null
+        };
+        
+        // Load screen image
+        const screenImage = new Image();
+        screenImage.src = 'screen.png';
+        screenImage.onload = () => {
+            screenDisplay.image = screenImage;
         };
 
         let speechBubbles = [];
@@ -437,6 +457,13 @@
             vendingMachine.x = videoOffsetX + (videoWidth * vendingMachine.relativeX);
             vendingMachine.y = videoOffsetY + (videoHeight * vendingMachine.relativeY);
             
+            // Scale and position screen display at fixed relative position in video
+            screenDisplay.width = videoWidth * screenDisplay.baseWidth;
+            screenDisplay.height = videoWidth * screenDisplay.baseHeight; // Keep square aspect ratio
+            // Lock position to exact percentage of video dimensions
+            screenDisplay.x = videoOffsetX + (videoWidth * screenDisplay.relativeX);
+            screenDisplay.y = videoOffsetY + (videoHeight * screenDisplay.relativeY);
+            
         }
 
         // Draw simple ground line
@@ -454,6 +481,20 @@
             // ctx.strokeRect(videoOffsetX, 0, videoWidth, sceneHeight);
         }
 
+        // Draw screen display
+        function drawScreenDisplay() {
+            const { x, y, width, height, image } = screenDisplay;
+            
+            // Draw the screen.png image if loaded
+            if (image) {
+                ctx.drawImage(image, x - width/2, y, width, height);
+            } else {
+                // Fallback: simple rectangle if image not loaded
+                ctx.fillStyle = 'rgba(100, 100, 150, 0.8)';
+                ctx.fillRect(x - width/2, y, width, height);
+            }
+        }
+        
         // Draw vending machine
         function drawVendingMachine() {
             const { x, y, width, height, glowing, glowIntensity, image } = vendingMachine;
@@ -659,6 +700,7 @@
             
             // Draw scene elements on top of video
             drawGround();
+            drawScreenDisplay();
             drawVendingMachine();
             drawCharacter();
             drawSpeechBubbles();
