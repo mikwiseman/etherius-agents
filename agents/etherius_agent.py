@@ -35,6 +35,10 @@ class ChatRequest(Model):
 class ChatResponse(Model):
     response: str
 
+class BroadcastMessage(Model):
+    message: str
+    original_sender: str
+
 
 class SimpleOpenSeaMCP:
     """Minimal MCP client that uses GPT-4o for request/response handling"""
@@ -327,12 +331,26 @@ Plain text only. No JSON. No code fences.
 
 mcp_client: Optional[SimpleOpenSeaMCP] = None
 
+# Addresses of the three receiver agents (will be set on startup)
+katrik_agent_address = None
+vitalik_agent_address = None
+tv_agent_address = None
+
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    global mcp_client
+    global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address
     ctx.logger.info("🌟 Simplified Etherius Agent Starting")
     ctx.logger.info(f"📍 Address: {agent.address}")
     ctx.logger.info("🤖 Using ASI:One Mini for intelligent NFT queries")
+    
+    # Use the actual agent addresses
+    katrik_agent_address = "agent1qw5tlakv4cqc8jztkksfz5rlkld74v0dcnkl46tcuvyrxwk9s6dzwryk9lf"
+    vitalik_agent_address = "agent1qwel00zmglnll707lhle9nvnsntqcmahvya5wsa0vyd42sy26sz0wxqp2vs"
+    tv_agent_address = "agent1qgydk7m0ghhcf0l6kme7enwlkxswvzlcwqg8epwaexs259re94cdg07kzr2"
+    
+    ctx.logger.info(f"📡 Will broadcast to Katrik: {katrik_agent_address}")
+    ctx.logger.info(f"📡 Will broadcast to Vitalik: {vitalik_agent_address}")
+    ctx.logger.info(f"📡 Will broadcast to TV: {tv_agent_address}")
     
     # Check if API key is configured
     if not ASI_ONE_API_KEY:
@@ -345,8 +363,24 @@ async def startup(ctx: Context):
 
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
 async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
-    """Chat endpoint that uses ASI:One Mini to handle all OpenSea queries"""
+    """Chat endpoint that uses ASI:One Mini to handle all OpenSea queries and broadcasts to other agents"""
     ctx.logger.info(f"💬 Chat: {req.message}")
+    
+    # Broadcast the message to all three agents
+    if katrik_agent_address and vitalik_agent_address and tv_agent_address:
+        broadcast_msg = BroadcastMessage(
+            message=req.message,
+            original_sender="user"
+        )
+        
+        # Send to all agents (fire and forget)
+        ctx.logger.info("📢 Broadcasting message to all agents...")
+        await ctx.send(katrik_agent_address, broadcast_msg)
+        await ctx.send(vitalik_agent_address, broadcast_msg)
+        await ctx.send(tv_agent_address, broadcast_msg)
+        ctx.logger.info("✅ Broadcast complete")
+    else:
+        ctx.logger.warning("⚠️ Agent addresses not initialized, skipping broadcast")
     
     if not mcp_client:
         return ChatResponse(response="Agent not initialized. Please restart.")
@@ -356,6 +390,7 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
 
 @agent.on_rest_get("/health", ChatResponse)
 async def health_check(ctx: Context) -> ChatResponse:
+    ctx.logger.info("Health check requested")
     return ChatResponse(response="Simplified Etherius agent is healthy!")
 
 if __name__ == "__main__":
