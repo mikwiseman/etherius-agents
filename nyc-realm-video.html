@@ -661,25 +661,25 @@
         // Update character speech bubble
         function updateCharacterBubble(agentName, text) {
             // Truncate text for bubble
-            const bubbleText = text.substring(0, 50) + (text.length > 50 ? '...' : '');
+            const bubbleText = text.substring(0, 80) + (text.length > 80 ? '...' : '');
             
             let x, y;
             switch(agentName.toLowerCase()) {
                 case 'etherius':
                     x = vendingMachine.x;
-                    y = vendingMachine.y - 20;
+                    y = vendingMachine.y - 40;  // More space for larger bubble
                     vendingMachine.glowing = true;
                     setTimeout(() => { vendingMachine.glowing = false; }, 3000);
                     break;
                 case 'vitalik':
                     x = character2.x;
-                    y = character2.y - character2.height - 20;
+                    y = character2.y - character2.height - 40;  // More space for larger bubble
                     character2.state = 'talking';
                     setTimeout(() => { character2.state = 'idle'; }, 3000);
                     break;
                 case 'katrik':
                     x = character.x;
-                    y = character.y - character.height - 20;
+                    y = character.y - character.height - 40;  // More space for larger bubble
                     character.state = 'talking';
                     setTimeout(() => { character.state = 'idle'; }, 3000);
                     break;
@@ -704,11 +704,38 @@
                     ctx.save();
                     ctx.globalAlpha = bubble.opacity;
                     
-                    // Measure text
-                    ctx.font = '12px sans-serif';
-                    const textWidth = ctx.measureText(bubble.text).width;
-                    const bubbleWidth = Math.min(textWidth + 20, 200);
-                    const bubbleHeight = 30;
+                    // Larger font and bubble dimensions
+                    ctx.font = '16px sans-serif';
+                    
+                    // Word wrap for longer text
+                    const maxWidth = 280;
+                    const words = bubble.text.split(' ');
+                    const lines = [];
+                    let currentLine = '';
+                    
+                    words.forEach(word => {
+                        const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                        const metrics = ctx.measureText(testLine);
+                        if (metrics.width > maxWidth && currentLine) {
+                            lines.push(currentLine);
+                            currentLine = word;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    });
+                    if (currentLine) {
+                        lines.push(currentLine);
+                    }
+                    
+                    // Calculate bubble dimensions based on text
+                    const lineHeight = 24;
+                    const padding = 30;  // More padding for bigger bubble
+                    const bubbleHeight = lines.length * lineHeight + padding * 2;
+                    const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+                    const bubbleWidth = Math.min(
+                        textWidth + padding * 3,  // More horizontal padding
+                        350  // Wider max width
+                    );
                     
                     // Bubble background color based on agent
                     let fillStyle;
@@ -731,38 +758,58 @@
                     ctx.beginPath();
                     ctx.roundRect(
                         bubble.x - bubbleWidth/2,
-                        bubble.y - bubbleHeight/2,
+                        bubble.y - bubbleHeight,
                         bubbleWidth,
                         bubbleHeight,
-                        10
+                        15
                     );
                     ctx.fill();
                     
                     // Bubble tail
                     ctx.beginPath();
-                    ctx.moveTo(bubble.x - 5, bubble.y + bubbleHeight/2);
-                    ctx.lineTo(bubble.x + 5, bubble.y + bubbleHeight/2);
-                    ctx.lineTo(bubble.x, bubble.y + bubbleHeight/2 + 10);
+                    ctx.moveTo(bubble.x - 8, bubble.y);
+                    ctx.lineTo(bubble.x + 8, bubble.y);
+                    ctx.lineTo(bubble.x, bubble.y + 15);
                     ctx.closePath();
                     ctx.fill();
                     
-                    // Text
+                    // Draw text lines
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = '12px sans-serif';
+                    ctx.font = '16px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.fillText(bubble.text, bubble.x, bubble.y);
+                    
+                    lines.forEach((line, index) => {
+                        const yPos = bubble.y - bubbleHeight + padding + (index + 0.5) * lineHeight;
+                        ctx.fillText(line, bubble.x, yPos);
+                    });
                     
                     ctx.restore();
                 }
             });
         }
 
-        // Update speech bubbles (fade out after time)
+        // Update speech bubbles (fade out after time and follow characters)
         function updateSpeechBubbles() {
             Object.keys(characterBubbles).forEach(key => {
                 const bubble = characterBubbles[key];
                 if (bubble) {
+                    // Update bubble position to follow character
+                    switch(key) {
+                        case 'katrik':
+                            bubble.x = character.x;
+                            bubble.y = character.y - character.height - 40;
+                            break;
+                        case 'vitalik':
+                            bubble.x = character2.x;
+                            bubble.y = character2.y - character2.height - 40;
+                            break;
+                        case 'etherius':
+                            bubble.x = vendingMachine.x;
+                            bubble.y = vendingMachine.y - 40;
+                            break;
+                    }
+                    
                     bubble.age++;
                     if (bubble.age > 420) { // Fade after 7 seconds at 60fps
                         bubble.opacity = Math.max(0, bubble.opacity - 0.02);
