@@ -71,7 +71,7 @@ async def handle_broadcast(ctx: Context, sender: str, msg: BroadcastMessage):
                 
                 # Send response back to etherius
                 response_msg = BroadcastMessage(
-                    message=f"Vitalik's thoughts: {gpt_response}",
+                    message=f"{gpt_response}",
                     original_sender="vitalik_gpt"
                 )
                 
