@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model
-import openai
+import requests
 
 # Ensure parent directory is importable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,7 +24,9 @@ agent = Agent(
     readme_path = "README.md"
 )
 
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# ASI:One Mini configuration
+ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
+ASI_ONE_URL = "https://api.asi1.ai/v1/chat/completions"
 
 # Simple Models
 class ChatRequest(Model):
@@ -87,7 +89,10 @@ class SimpleOpenSeaMCP:
             return False
     
     async def query_with_gpt(self, user_query: str) -> str:
-        """Use GPT-4o to generate MCP request, execute it, and parse response"""
+        """Use ASI:One Mini to generate MCP request, execute it, and parse response"""
+        
+        if not ASI_ONE_API_KEY:
+            return "⚠️ ASI:One API key required. Set ASI_ONE_API_KEY in your .env file."
         
         if not self.access_token:
             return "⚠️ OpenSea MCP token required. Set OPENSEA_MCP_TOKEN in your .env file."
@@ -95,7 +100,7 @@ class SimpleOpenSeaMCP:
         if not await self.initialize():
             return "Failed to initialize OpenSea MCP session."
         
-        # Step 1: Use GPT-4o to determine the right MCP tool and arguments
+        # Step 1: Use ASI:One Mini to determine the right MCP tool and arguments
         tool_prompt = f"""
 You are a tool router for OpenSea MCP. Choose exactly ONE tool and the minimal, valid arguments to satisfy the user's request.
 Return ONLY a JSON object with keys "tool" and "args". No markdown, no code fences, no extra text.
@@ -142,17 +147,34 @@ OUTPUT (examples; adapt to the user query):
 
 
         try:
-            # Get GPT-4o to generate the MCP request
-            response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
+            # Get ASI:One Mini to generate the MCP request
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {ASI_ONE_API_KEY}"
+            }
+            data = {
+                "model": "asi1-mini",
+                "messages": [
                     {"role": "system", "content": "You generate OpenSea MCP API requests. Respond only with valid JSON!!, no ```, no markdown or extra text."},
                     {"role": "user", "content": tool_prompt}
                 ]
-            )
+            }
+            response = requests.post(ASI_ONE_URL, headers=headers, json=data)
+            
+            # Check if request was successful
+            if response.status_code != 200:
+                self._ctx.logger.error(f"ASI:One API error: {response.status_code} - {response.text}")
+                return f"❌ ASI:One API error: {response.status_code}"
+            
+            response_json = response.json()
+            
+            # Check if response has expected structure
+            if 'choices' not in response_json or not response_json['choices']:
+                self._ctx.logger.error(f"Invalid ASI:One response structure: {response_json}")
+                return "❌ Invalid response from ASI:One Mini"
             
             # Clean up response content (remove markdown if present)
-            content = response.choices[0].message.content.strip()
+            content = response_json['choices'][0]['message']['content'].strip()
             if content.startswith("```"):
                 # Remove markdown code blocks
                 content = content.split("```")[1]
@@ -168,12 +190,12 @@ OUTPUT (examples; adapt to the user query):
             if "sort_by" in tool_args:
                 tool_args["sortBy"] = tool_args.pop("sort_by")
             
-            self._ctx.logger.info(f"🤖 GPT-4o selected: {tool_name} with args: {tool_args}")
+            self._ctx.logger.info(f"🤖 ASI:One Mini selected: {tool_name} with args: {tool_args}")
             
             # Step 2: Execute the MCP request
             mcp_result = await self._execute_mcp_call(tool_name, tool_args)
             
-            # Step 3: Use GPT-4o to parse and format the response
+            # Step 3: Use ASI:One Mini to parse and format the response
             if "error" in mcp_result:
                 return f"❌ Error: {mcp_result['error']}"
             
@@ -210,15 +232,32 @@ Plain text only. No JSON. No code fences.
 """
 
 
-            response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {ASI_ONE_API_KEY}"
+            }
+            data = {
+                "model": "asi1-mini",
+                "messages": [
                     {"role": "system", "content": "You parse NFT data and provide clear summaries."},
                     {"role": "user", "content": parse_prompt}
                 ]
-            )
+            }
+            response = requests.post(ASI_ONE_URL, headers=headers, json=data)
             
-            return response.choices[0].message.content
+            # Check if request was successful
+            if response.status_code != 200:
+                self._ctx.logger.error(f"ASI:One API error: {response.status_code} - {response.text}")
+                return f"❌ ASI:One API error: {response.status_code}"
+            
+            response_json = response.json()
+            
+            # Check if response has expected structure
+            if 'choices' not in response_json or not response_json['choices']:
+                self._ctx.logger.error(f"Invalid ASI:One response structure: {response_json}")
+                return "❌ Invalid response from ASI:One Mini"
+            
+            return response_json['choices'][0]['message']['content']
             
         except json.JSONDecodeError as e:
             return f"Failed to parse GPT response: {e}"
@@ -293,13 +332,20 @@ async def startup(ctx: Context):
     global mcp_client
     ctx.logger.info("🌟 Simplified Etherius Agent Starting")
     ctx.logger.info(f"📍 Address: {agent.address}")
-    ctx.logger.info("🤖 Using GPT-4o for intelligent NFT queries")
+    ctx.logger.info("🤖 Using ASI:One Mini for intelligent NFT queries")
+    
+    # Check if API key is configured
+    if not ASI_ONE_API_KEY:
+        ctx.logger.warning("⚠️ ASI_ONE_API_KEY not found in environment. Please set it in your .env file.")
+    else:
+        ctx.logger.info("✅ ASI:One API key configured")
+    
     mcp_client = SimpleOpenSeaMCP(ctx)
     ctx.logger.info("✨ Ready!")
 
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
 async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
-    """Chat endpoint that uses GPT-4o to handle all OpenSea queries"""
+    """Chat endpoint that uses ASI:One Mini to handle all OpenSea queries"""
     ctx.logger.info(f"💬 Chat: {req.message}")
     
     if not mcp_client:
@@ -314,9 +360,9 @@ async def health_check(ctx: Context) -> ChatResponse:
 
 if __name__ == "__main__":
     print("""
-🌟 Simplified Etherius Agent - GPT-4o Powered NFT Intelligence
+🌟 Simplified Etherius Agent - ASI:One Mini Powered NFT Intelligence
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Natural language NFT queries via GPT-4o
+• Natural language NFT queries via ASI:One Mini
 • Automatic OpenSea MCP request generation
 • Intelligent response parsing and formatting
 • REST API: POST /chat {"message": "your question"}
