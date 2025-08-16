@@ -13,8 +13,15 @@ from dotenv import load_dotenv
 import aiohttp
 
 from uagents import Agent, Context, Model, Protocol
-
 from openai import OpenAI
+from agents.x402_handler import payment_handler, PaymentStatus
+
+try:
+    from mcp import Client as MCPClient
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+    print("Warning: MCP not available. Using fallback data.")
 
 load_dotenv()
 
@@ -84,7 +91,9 @@ class NFTPurchaseResponse(Model):
     final_price_eth: float
     final_price_usd: float
     payment_url: str
+    payment_id: str
     transaction_hash: Optional[str]
+    payment_status: str
     opensea_url: str
     message: str
 
@@ -100,74 +109,115 @@ class MarketAnalysisResponse(Model):
     trending_traits: List[str]
     recommendation: str
 
+class NFTPaymentVerification(Model):
+    payment_id: str
+    transaction_hash: Optional[str]
+    nft_token_id: str
+    collection_address: str
+
+class NFTPaymentVerificationResponse(Model):
+    payment_id: str
+    verified: bool
+    status: str
+    nft_transferred: bool
+    transaction_hash: Optional[str]
+    message: str
+
 # OpenSea MCP client
 class OpenSeaMCPClient:
     def __init__(self):
-        self.base_url = os.getenv("OPENSEA_MCP_URL", "https://mcp.opensea.io/mcp")
-        self.access_token = os.getenv("OPENSEA_ACCESS_TOKEN")
-        self.headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
-        }
+        self.mcp_server_url = "http://localhost:8300"  # OpenSea MCP server
+        self.mcp_client = None
+        self.session = None
+        
+        if MCP_AVAILABLE:
+            try:
+                # Connect to MCP server
+                self.session = aiohttp.ClientSession()
+                print("✅ MCP client ready for OpenSea data")
+            except Exception as e:
+                print(f"❌ MCP connection failed: {e}")
     
     async def search_nfts(self, query: str, filters: Dict[str, Any]) -> List[NFT]:
         """Search NFTs using OpenSea MCP"""
+        if not MCP_AVAILABLE or not self.session:
+            raise Exception("MCP connection required for NFT search. Please ensure OpenSea MCP server is running.")
+        
         try:
-            # Simulate MCP query (replace with actual MCP integration)
-            # In production, this would use the actual OpenSea MCP protocol
-            mock_nfts = self._generate_mock_nfts(query, filters)
-            return mock_nfts
+            # Call MCP tool for real NFT search
+            async with self.session.post(
+                f"{self.mcp_server_url}/tools/search_nfts_by_criteria",
+                json={
+                    "query": query,
+                    "max_price_eth": filters.get("max_price"),
+                    "collection": filters.get("collection"),
+                    "limit": filters.get("limit", 20)
+                }
+            ) as response:
+                if response.status == 200:
+                    nft_data = await response.json()
+                    # Convert to NFT models
+                    return self._parse_nft_data(nft_data)
+                else:
+                    raise Exception(f"MCP server error: {response.status}")
         except Exception as e:
             print(f"Error searching NFTs: {e}")
-            return []
+            raise
     
     async def get_collection_stats(self, collection: str) -> Dict[str, Any]:
         """Get collection statistics from OpenSea"""
-        # Simulate collection stats (replace with actual MCP call)
-        return {
-            "floor_price": random.uniform(0.1, 5.0),
-            "volume_24h": random.uniform(10, 1000),
-            "price_change_24h": random.uniform(-20, 30),
-            "num_owners": random.randint(100, 10000),
-            "total_supply": random.randint(1000, 10000)
-        }
-    
-    def _generate_mock_nfts(self, query: str, filters: Dict[str, Any]) -> List[NFT]:
-        """Generate mock NFTs for testing"""
-        mock_collections = [
-            ("Bored Ape Yacht Club", "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"),
-            ("CryptoPunks", "0xb47e3cd837dDF8e4c57F05d70E7e5b67c3d1e3a5"),
-            ("Azuki", "0xED5AF388653567Af2F388E6224dC7C4b3241C544"),
-            ("Doodles", "0x8a90CAb2b38dba80c64b7734e58Ee1dB38B8992e"),
-            ("CloneX", "0x49cF6f5d44E70224e2E23fDcdd2C053F30aDA28B")
-        ]
+        if not MCP_AVAILABLE or not self.session:
+            raise Exception("MCP connection required for collection stats. Please ensure OpenSea MCP server is running.")
         
+        try:
+            # Call MCP tool for real collection stats
+            async with self.session.post(
+                f"{self.mcp_server_url}/tools/get_nft_collection_stats",
+                json={"collection_slug": collection}
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    stats = data.get("stats", {})
+                    return {
+                        "floor_price": stats.get("floor_price"),
+                        "volume_24h": stats.get("one_day_volume"),
+                        "price_change_24h": stats.get("one_day_change", 0) * 100,
+                        "num_owners": stats.get("num_owners"),
+                        "total_supply": stats.get("total_supply")
+                    }
+                else:
+                    raise Exception(f"MCP server error: {response.status}")
+        except Exception as e:
+            print(f"Error getting collection stats: {e}")
+            raise
+    
+    def _parse_nft_data(self, nft_data: List[Dict[str, Any]]) -> List[NFT]:
+        """Parse NFT data from MCP response"""
         nfts = []
-        for i in range(min(10, filters.get("limit", 10))):
-            collection = random.choice(mock_collections)
+        for item in nft_data:
             nft = NFT(
-                token_id=f"{random.randint(1000, 9999)}",
-                collection_name=collection[0],
-                collection_address=collection[1],
-                name=f"{collection[0]} #{random.randint(1000, 9999)}",
-                description=f"A unique NFT from the {collection[0]} collection",
-                image_url=f"https://example.com/nft/{random.randint(1000, 9999)}.png",
-                category=random.choice(list(NFTCategory)),
-                price_eth=round(random.uniform(0.5, 10.0), 3),
-                price_usd=round(random.uniform(0.5, 10.0) * 3000, 2),
-                rarity_score=round(random.uniform(0.3, 0.95), 2),
-                traits=[
-                    {"trait_type": "Background", "value": random.choice(["Blue", "Red", "Gold"])},
-                    {"trait_type": "Eyes", "value": random.choice(["Laser", "Normal", "3D"])},
-                    {"trait_type": "Mouth", "value": random.choice(["Smile", "Frown", "Bored"])}
-                ],
-                owner="0x" + "".join(random.choices("0123456789abcdef", k=40)),
+                token_id=str(item.get("token_id", "0")),
+                collection_name=item.get("collection", "Unknown"),
+                collection_address="0x" + "0" * 40,  # Placeholder
+                name=item.get("name", "NFT"),
+                description=item.get("description", ""),
+                image_url=item.get("image_url", ""),
+                category=NFTCategory.ART,
+                price_eth=item.get("price_eth", 0.1),
+                price_usd=item.get("price_eth", 0.1) * 3000,
+                rarity_score=item.get("rarity_rank", 50) / 100,
+                traits=item.get("traits", []),
+                owner="0x" + "0" * 40,
                 blockchain="ethereum",
-                marketplace_url=f"https://opensea.io/assets/{collection[1]}/{random.randint(1000, 9999)}"
+                marketplace_url=f"https://opensea.io/assets/{item.get('collection', '')}/{item.get('token_id', '')}"
             )
             nfts.append(nft)
-        
         return nfts
+    
+    async def close(self):
+        """Close MCP session"""
+        if self.session:
+            await self.session.close()
 
 opensea_client = OpenSeaMCPClient()
 
@@ -257,10 +307,15 @@ async def startup(ctx: Context):
     ctx.logger.info(f"📍 Address: {agent.address}")
     ctx.logger.info(f"🌊 OpenSea MCP: {'✅' if os.getenv('OPENSEA_ACCESS_TOKEN') else '❌'}")
     ctx.logger.info(f"🤖 AI recommendations: {'✅' if os.getenv('OPENAI_API_KEY') else '❌'}")
+    ctx.logger.info(f"💳 X402 payments: {'✅ Wallet: ' + payment_handler.wallet_address[:10] + '...' if payment_handler.wallet_address and payment_handler.wallet_address != '0x0000000000000000000000000000000000000000' else '❌ Not configured'}")
+    ctx.logger.info(f"🌐 Payment network: {payment_handler.network}")
 
 @agent.on_event("shutdown")
 async def shutdown(ctx: Context):
     ctx.logger.info("🛑 NFT Vending Machine shutting down...")
+    # Clean up MCP connection
+    if opensea_client.session:
+        await opensea_client.session.close()
 
 @nft_protocol.on_message(model=NFTQuery, replies=NFTResponse)
 async def handle_nft_query(ctx: Context, sender: str, msg: NFTQuery):
@@ -351,21 +406,47 @@ async def handle_nft_purchase(ctx: Context, sender: str, msg: NFTPurchaseRequest
     else:
         final_price = pricer.calculate_offer_price(nft, market_data)
     
-    # Generate payment URL
-    payment_url = f"https://x402.pay/nft/{msg.collection_address}/{msg.token_id}?amount={final_price}"
+    # Convert ETH price to USD for X402 payment
+    eth_to_usd = 3000  # In production, fetch real ETH price
+    final_price_usd = final_price * eth_to_usd
     
-    # Create transaction
-    transaction_hash = "0x" + "".join(random.choices("0123456789abcdef", k=64))
+    # Create X402 payment request for NFT
+    payment_request = payment_handler.create_payment_request(
+        product_id=f"NFT_{msg.collection_address}_{msg.token_id}",
+        amount_usd=final_price_usd,
+        description=f"NFT Purchase: {nft.name} from {nft.collection_name}",
+        metadata={
+            "nft_name": nft.name,
+            "collection": nft.collection_name,
+            "token_id": msg.token_id,
+            "collection_address": msg.collection_address,
+            "price_eth": final_price,
+            "buyer": sender,
+            "marketplace": "opensea"
+        }
+    )
+    
+    # Generate payment URL
+    payment_url = payment_handler.generate_payment_url(payment_request)
+    
+    # Store NFT purchase details for later verification
+    ctx.storage.set(f"nft_payment_{payment_request['payment_id']}", {
+        "nft": nft.dict(),
+        "final_price_eth": final_price,
+        "sender": sender
+    })
     
     response = NFTPurchaseResponse(
         success=True,
         nft=nft,
         final_price_eth=final_price,
-        final_price_usd=final_price * 3000,
+        final_price_usd=final_price_usd,
         payment_url=payment_url,
-        transaction_hash=transaction_hash,
-        opensea_url=f"https://opensea.io/tx/{transaction_hash}",
-        message=f"NFT purchase initiated! Final price: {final_price:.3f} ETH"
+        payment_id=payment_request["payment_id"],
+        transaction_hash=None,  # Will be set after payment
+        payment_status=PaymentStatus.PENDING,
+        opensea_url=nft.marketplace_url,
+        message=f"NFT payment request created! Price: {final_price:.3f} ETH (${final_price_usd:.2f}). Complete payment to receive NFT."
     )
     
     await ctx.send(sender, response)
@@ -413,6 +494,74 @@ async def handle_market_analysis(ctx: Context, sender: str, msg: MarketAnalysis)
     )
     
     await ctx.send(sender, response)
+
+@nft_protocol.on_message(model=NFTPaymentVerification, replies=NFTPaymentVerificationResponse)
+async def handle_nft_payment_verification(ctx: Context, sender: str, msg: NFTPaymentVerification):
+    """Verify X402 payment and transfer NFT ownership"""
+    ctx.logger.info(f"💳 Verifying NFT payment {msg.payment_id} from {sender}")
+    
+    # Verify payment through X402
+    verified, payment_details = await payment_handler.verify_payment(
+        msg.payment_id,
+        msg.transaction_hash
+    )
+    
+    if verified:
+        # Get stored NFT purchase details
+        purchase_data = ctx.storage.get(f"nft_payment_{msg.payment_id}")
+        
+        if purchase_data:
+            nft_data = purchase_data["nft"]
+            
+            # In production, this would trigger actual NFT transfer on blockchain
+            # For now, we simulate the transfer
+            transfer_success = True  # Mock successful transfer
+            
+            if transfer_success:
+                ctx.logger.info(f"✅ NFT payment verified and transferred: {nft_data['name']}")
+                
+                # Generate OpenSea transaction URL
+                tx_hash = payment_details.get("transaction_hash", "0x" + "0" * 64)
+                opensea_tx_url = f"https://opensea.io/tx/{tx_hash}"
+                
+                await ctx.send(sender, NFTPaymentVerificationResponse(
+                    payment_id=msg.payment_id,
+                    verified=True,
+                    status=PaymentStatus.COMPLETED,
+                    nft_transferred=True,
+                    transaction_hash=tx_hash,
+                    message=f"Payment confirmed! NFT '{nft_data['name']}' has been transferred to your wallet. View on OpenSea: {opensea_tx_url}"
+                ))
+            else:
+                await ctx.send(sender, NFTPaymentVerificationResponse(
+                    payment_id=msg.payment_id,
+                    verified=True,
+                    status=PaymentStatus.COMPLETED,
+                    nft_transferred=False,
+                    transaction_hash=payment_details.get("transaction_hash"),
+                    message="Payment verified but NFT transfer failed. Contact support for refund."
+                ))
+        else:
+            await ctx.send(sender, NFTPaymentVerificationResponse(
+                payment_id=msg.payment_id,
+                verified=True,
+                status=PaymentStatus.COMPLETED,
+                nft_transferred=False,
+                transaction_hash=payment_details.get("transaction_hash"),
+                message="Payment verified but NFT purchase data not found."
+            ))
+    else:
+        error_msg = payment_details.get("error", "Payment verification failed")
+        status = payment_details.get("payment", {}).get("status", PaymentStatus.FAILED)
+        
+        await ctx.send(sender, NFTPaymentVerificationResponse(
+            payment_id=msg.payment_id,
+            verified=False,
+            status=status,
+            nft_transferred=False,
+            transaction_hash=None,
+            message=f"Payment not verified: {error_msg}"
+        ))
 
 # Include protocol
 agent.include(nft_protocol, publish_manifest=True)

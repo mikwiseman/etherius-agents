@@ -1,4 +1,29 @@
-# Fetch.ai Development Rules
+# Etherius Agents Development Guide
+
+## 🚀 Project Setup
+
+### Virtual Environment (REQUIRED)
+```bash
+# Create virtual environment (if not exists)
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # On macOS/Linux
+# or
+venv\Scripts\activate  # On Windows
+
+# Install all dependencies
+pip install -r requirements.txt
+```
+
+**IMPORTANT**: Always use the virtual environment when running agents or tests.
+
+## 🔍 CRITICAL: Documentation Search Instructions
+
+**When searching for documentation, ALWAYS search for the latest documentation from August 2025 onwards.**
+- Include "August 2025" or "2025" in your search queries
+- Prioritize the most recent documentation versions
+- Look for updated APIs and patterns from 2025
 
 ## 📚 Official Documentation Links
 

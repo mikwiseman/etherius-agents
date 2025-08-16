@@ -16,3 +16,14 @@ numpy>=1.24.0
 x402==0.2.0
 eth-account>=0.10.0
 httpx>=0.25.0
+
+# MCP (Model Context Protocol) dependencies
+mcp>=1.0.0
+fastmcp>=0.1.0
+
+# Coinbase AgentKit and CDP SDK
+coinbase-agentkit>=0.1.0
+cdp-sdk-python>=1.0.0
+
+# Additional blockchain tools
+pycoingecko>=3.0.0

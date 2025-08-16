@@ -12,9 +12,7 @@ from datetime import datetime, UTC
 from enum import Enum
 from dotenv import load_dotenv
 
-from eth_account import Account
 from web3 import Web3
-from x402.clients.httpx import x402HttpxClient
 import httpx
 
 load_dotenv()
@@ -32,17 +30,17 @@ class PaymentNetwork(str, Enum):
     ETHEREUM = "ethereum"
 
 class X402PaymentHandler:
-    """Handles X402 payment requests and verification"""
+    """Handles X402 payment requests and verification for sellers"""
     
     def __init__(self):
-        # Load configuration from environment
+        # Load seller configuration from environment
+        # Sellers only need a wallet address to receive payments, no private key required
         self.wallet_address = os.getenv("X402_WALLET_ADDRESS", "")
-        self.private_key = os.getenv("X402_PRIVATE_KEY", "")
         self.facilitator_url = os.getenv("X402_FACILITATOR_URL", "https://x402.org/facilitator")
         self.network = os.getenv("X402_NETWORK", "base-sepolia")
         self.usdc_contract = os.getenv("X402_USDC_CONTRACT", "0x036CbD53842c5426634e7929541eC2318f3dCF7e")
         
-        # Initialize Web3 for blockchain interactions
+        # Initialize Web3 for blockchain interactions (read-only for sellers)
         self._init_web3()
         
         # Payment tracking
@@ -50,7 +48,7 @@ class X402PaymentHandler:
         self.completed_payments: Dict[str, Dict[str, Any]] = {}
         
     def _init_web3(self):
-        """Initialize Web3 connection"""
+        """Initialize Web3 connection for sellers (read-only)"""
         # Use appropriate RPC based on network
         if self.network == "base-sepolia":
             rpc_url = "https://sepolia.base.org"
@@ -61,15 +59,9 @@ class X402PaymentHandler:
             
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         
-        # Initialize account if private key is provided
-        if self.private_key and self.private_key != "your_wallet_private_key_here":
-            try:
-                self.account = Account.from_key(self.private_key)
-            except Exception as e:
-                print(f"Warning: Could not initialize account from private key: {e}")
-                self.account = None
-        else:
-            self.account = None
+        # Sellers don't need an account - they only receive payments
+        # Buyers handle the actual transaction signing
+        self.account = None
     
     def create_payment_request(
         self,
@@ -289,6 +281,7 @@ class X402PaymentHandler:
     ) -> Dict[str, Any]:
         """
         Process a refund for a completed payment
+        Note: Sellers would need to manually process refunds through their wallet
         
         Args:
             payment_id: Payment to refund
@@ -307,26 +300,22 @@ class X402PaymentHandler:
         payment = self.completed_payments[payment_id]
         refund_amount = amount or payment["amount_usdc"]
         
-        # In production, this would initiate a blockchain refund transaction
+        # Sellers need to manually process refunds from their wallet
+        # This just tracks the refund request
         refund = {
             "refund_id": f"REF_{int(time.time())}_{payment_id}",
             "payment_id": payment_id,
             "amount": refund_amount,
             "reason": reason,
-            "status": "pending",
-            "initiated_at": datetime.now(UTC).isoformat()
+            "status": "manual_processing_required",
+            "initiated_at": datetime.now(UTC).isoformat(),
+            "instructions": f"Please manually send {refund_amount} USDC to the buyer's wallet"
         }
-        
-        # Mock refund processing (replace with actual blockchain transaction)
-        await asyncio.sleep(1)  # Simulate processing
-        
-        refund["status"] = "completed"
-        refund["transaction_hash"] = "0x" + "0" * 64  # Mock hash
-        refund["completed_at"] = datetime.now(UTC).isoformat()
         
         return {
             "success": True,
-            "refund": refund
+            "refund": refund,
+            "note": "Manual refund processing required from seller's wallet"
         }
     
     def get_payment_analytics(self) -> Dict[str, Any]:
