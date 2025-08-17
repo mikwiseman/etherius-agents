@@ -48,6 +48,14 @@ class AgentMessage(Model):
 class AgentMessagesResponse(Model):
     messages: List[AgentMessage]
 
+class ImageUrlMessage(Model):
+    image_url: str
+    source: str
+
+class TvImageResponse(Model):
+    image_url: str
+    timestamp: float
+
 
 class SimpleOpenSeaMCP:
     """Minimal MCP client that uses GPT-4o for request/response handling"""
@@ -101,7 +109,7 @@ class SimpleOpenSeaMCP:
             self._ctx.logger.error(f"Init error: {e}")
             return False
     
-    async def query_with_gpt(self, user_query: str) -> str:
+    async def query_with_gpt(self, user_query: str, ctx: Context = None) -> str:
         """Use ASI:One Mini to generate MCP request, execute it, and parse response"""
         
         if not ASI_ONE_API_KEY:
@@ -116,6 +124,7 @@ class SimpleOpenSeaMCP:
         # Step 1: Use ASI:One Mini to determine the right MCP tool and arguments
         tool_prompt = f"""
 You are a tool router for OpenSea MCP. Choose exactly ONE tool and the minimal, valid arguments to satisfy the user's request.
+IMPORTANT: When searching for NFTs, collections, or items, always include parameters that will return image URLs (use includes parameters when available).
 Return ONLY a JSON object with keys "tool" and "args". No markdown, no code fences, no extra text.
 
 USER QUERY:
@@ -125,9 +134,9 @@ ALLOWED TOOLS:
 - "search" — AI-powered marketplace search
 - "fetch" — Fetch full details for an entity by id
 - "search_collections"
-- "get_collection" — includes: analytics, offers, holders, activity, items, attributes
+- "get_collection" — includes: activity, holders, offers, floorPrices, salesVolume, items, attributes
 - "search_items"
-- "get_item" — includes: activity, offers, owners, analytics
+- "get_item" — includes: activity, offers, owners
 - "search_tokens"
 - "get_token" — includes: priceHistory, activity, ohlcv
 - "get_token_swap_quote"
@@ -145,12 +154,13 @@ ARGUMENT RULES:
   Aliases → canonical: eth|mainnet→ethereum; matic→polygon; sol→solana.
 - Timeframes: ONE_HOUR | ONE_DAY | SEVEN_DAYS | THIRTY_DAYS.
 - get_top_collections.sortBy: FLOOR_PRICE | ONE_DAY_VOLUME | ONE_DAY_SALES | VOLUME | SALES.
+- IMPORTANT FOR NFT IMAGES: When using get_collection, get_item, or search tools, ALWAYS include "items" in the includes array to get NFT images.
 - Use only relevant args (query, slug, address, symbol, contract, tokenId, limit, chain, includes, fromToken, toToken, amount).
 - Never invent parameters. Omit null/empty values. Keep args minimal and correct.
 
 OUTPUT (examples; adapt to the user query):
 {{"tool":"search_collections","args":{{"query":"pudgy penguins","limit":5,"chain":"ethereum"}}}}
-{{"tool":"get_collection","args":{{"slug":"boredapeyachtclub","includes":["analytics","items"]}}}}
+{{"tool":"get_collection","args":{{"slug":"boredapeyachtclub","includes":["floorPrices","salesVolume","items"]}}}}
 {{"tool":"get_trending_collections","args":{{"timeframe":"ONE_DAY","limit":10}}}}
 {{"tool":"get_top_collections","args":{{"sortBy":"ONE_DAY_VOLUME","limit":10,"chain":"ethereum"}}}}
 {{"tool":"get_profile","args":{{"address":"vitalik.eth"}}}}
@@ -231,6 +241,7 @@ GUIDELINES:
 - If it returned tokens: show symbol/name, price and % change (1d/7d) if present, chain if relevant.
 - If it returned a swap quote: show expectedOut, minimumReceived (if present), gas estimate, and (only if also provided in the response or question) whether it is enough to buy the referenced floor.
 - Numbers: format like "2.45 ETH", "1,234 sales", "$12,340". If a field is missing, output "—".
+- IMAGE URLS: IMPORTANT - Always include any image URLs found in the response data (look for fields like image_url, image, display_image_url, collection.image_url, nft.image_url, etc.). Include the full URL exactly as provided.
 - Links: when identifiers exist, include OpenSea links:
   • Collection → https://opensea.io/collection/{{slug}}
   • Item → https://opensea.io/assets/{{chain}}/{{contract}}/{{tokenId}}
@@ -270,7 +281,21 @@ Plain text only. No JSON. No code fences.
                 self._ctx.logger.error(f"Invalid ASI:One response structure: {response_json}")
                 return "❌ Invalid response from ASI:One Mini"
             
-            return response_json['choices'][0]['message']['content']
+            parsed_response = response_json['choices'][0]['message']['content']
+            
+            # Broadcast parsed response to TV agent if context is available
+            if ctx and tv_agent_address:
+                try:
+                    broadcast_msg = BroadcastMessage(
+                        message=parsed_response,
+                        original_sender="etherius_parsed"
+                    )
+                    await ctx.send(tv_agent_address, broadcast_msg)
+                    self._ctx.logger.info("📺 Broadcasted parsed NFT data to TV agent")
+                except Exception as e:
+                    self._ctx.logger.error(f"Failed to broadcast to TV agent: {e}")
+            
+            return parsed_response
             
         except json.JSONDecodeError as e:
             return f"Failed to parse GPT response: {e}"
@@ -349,6 +374,12 @@ tv_agent_address = None
 agent_messages: List[AgentMessage] = []
 MAX_MESSAGES = 50
 
+# Store current TV image
+current_tv_image = {
+    "image_url": "",
+    "timestamp": 0
+}
+
 @agent.on_event("startup")
 async def startup(ctx: Context):
     global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address
@@ -399,7 +430,7 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
     if not mcp_client:
         return ChatResponse(response="Agent not initialized. Please restart.")
     
-    response = await mcp_client.query_with_gpt(req.message)
+    response = await mcp_client.query_with_gpt(req.message, ctx)
     
     # Store Etherius's response
     agent_msg = AgentMessage(
@@ -450,6 +481,28 @@ async def get_agent_messages(ctx: Context) -> AgentMessagesResponse:
     global agent_messages
     ctx.logger.info(f"Agent messages requested, returning {len(agent_messages)} messages")
     return AgentMessagesResponse(messages=agent_messages)
+
+@agent.on_message(model=ImageUrlMessage)
+async def handle_tv_image(ctx: Context, sender: str, msg: ImageUrlMessage):
+    """Handle image URL from TV agent"""
+    global current_tv_image
+    ctx.logger.info(f"📺 Received image URL from TV: {msg.image_url}")
+    
+    # Store the image URL with timestamp
+    current_tv_image = {
+        "image_url": msg.image_url,
+        "timestamp": time.time()
+    }
+    ctx.logger.info("TV image URL stored for display")
+
+@agent.on_rest_get("/tv_image", TvImageResponse)
+async def get_tv_image(ctx: Context) -> TvImageResponse:
+    """Get current TV image for frontend display"""
+    global current_tv_image
+    return TvImageResponse(
+        image_url=current_tv_image["image_url"],
+        timestamp=current_tv_image["timestamp"]
+    )
 
 @agent.on_rest_get("/health", ChatResponse)
 async def health_check(ctx: Context) -> ChatResponse:

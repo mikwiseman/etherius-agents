@@ -50,15 +50,8 @@ async def handle_broadcast(ctx: Context, sender: str, msg: BroadcastMessage):
             data = {
                 "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": """You are Vitalik Buterin. Based on the user's input, suggest a specific NFT search query.
-                     Start your response with 'Find' and mention a specific NFT collection or search.
-                     Examples:
-                     - "Find CryptoPunks with zombie traits"
-                     - "Find Bored Apes under 10 ETH"
-                     - "Find trending collections on Base"
-                     - "Find Pudgy Penguins floor price"
-                     - "Find latest Art Blocks drops"
-                     Be specific and actionable, always starting with 'Find'."""},
+                    {"role": "system", "content": """You are Vitalik Buterin. Based on the user's input, suggest a new NFT strategy based on the user's input.    
+                     Be specific and actionable and consise"""},
                     {"role": "user", "content": msg.message}
                 ]
             }

@@ -426,6 +426,10 @@
         // Track last message timestamp to avoid duplicates
         let lastMessageTimestamp = 0;
         
+        // Track last TV image timestamp
+        let lastTvImageTimestamp = 0;
+        let currentTvImage = null;
+        
         // Polling interval
         let pollingInterval = null;
         
@@ -536,6 +540,55 @@
                 // Fallback: simple rectangle if image not loaded
                 ctx.fillStyle = 'rgba(100, 100, 150, 0.8)';
                 ctx.fillRect(x - width/2, y, width, height);
+            }
+            
+            // Draw NFT image on TV screen if available
+            if (currentTvImage && currentTvImage.imageObj && currentTvImage.opacity > 0) {
+                ctx.save();
+                ctx.globalAlpha = currentTvImage.opacity;
+                
+                // Calculate display area (much smaller than screen to show as display)
+                const padding = width * 0.35; // 35% padding on each side for twice smaller image
+                const displayX = x - width/2 + padding - 5; // Move left by 5 pixels
+                const displayY = y + padding - 10; // Move up by 10 pixels
+                const displayWidth = width - padding * 2;
+                const displayHeight = height - padding * 2;
+                
+                // Scale image to fit display area while maintaining aspect ratio
+                const imgAspect = currentTvImage.imageObj.width / currentTvImage.imageObj.height;
+                const displayAspect = displayWidth / displayHeight;
+                
+                let drawWidth, drawHeight, drawX, drawY;
+                
+                if (imgAspect > displayAspect) {
+                    // Image is wider - fit to width
+                    drawWidth = displayWidth;
+                    drawHeight = displayWidth / imgAspect;
+                    drawX = displayX;
+                    drawY = displayY + (displayHeight - drawHeight) / 2;
+                } else {
+                    // Image is taller - fit to height
+                    drawHeight = displayHeight;
+                    drawWidth = displayHeight * imgAspect;
+                    drawX = displayX + (displayWidth - drawWidth) / 2;
+                    drawY = displayY;
+                }
+                
+                // Draw with rounded corners to match TV screen
+                ctx.beginPath();
+                ctx.roundRect(drawX, drawY, drawWidth, drawHeight, 5);
+                ctx.clip();
+                
+                ctx.drawImage(currentTvImage.imageObj, drawX, drawY, drawWidth, drawHeight);
+                
+                // Add slight glow effect when showing image
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#667eea';
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.restore();
             }
         }
         
@@ -838,6 +891,7 @@
             // Update
             updateCharacter();
             updateSpeechBubbles();
+            updateTvImage();
             
             // Update vending machine glow
             if (vendingMachine.glowing) {
@@ -916,6 +970,71 @@
                 });
             } catch (error) {
                 console.error('Error polling agent messages:', error);
+            }
+        }
+        
+        // Poll for TV image
+        async function pollTvImage() {
+            try {
+                const response = await fetch('http://localhost:8100/tv_image');
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                
+                // Check if there's a new image
+                if (data.image_url && data.timestamp > lastTvImageTimestamp) {
+                    lastTvImageTimestamp = data.timestamp;
+                    
+                    // Load the new image
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous'; // Enable CORS
+                    
+                    img.onload = () => {
+                        // Set up the TV image with fade-in
+                        currentTvImage = {
+                            imageObj: img,
+                            opacity: 0,
+                            fadeDirection: 'in',
+                            displayTime: 0
+                        };
+                        
+                        console.log('TV image loaded:', data.image_url);
+                    };
+                    
+                    img.onerror = () => {
+                        console.error('Failed to load TV image:', data.image_url);
+                    };
+                    
+                    img.src = data.image_url;
+                }
+            } catch (error) {
+                console.error('Error polling TV image:', error);
+            }
+        }
+        
+        // Update TV image display (fade in/out)
+        function updateTvImage() {
+            if (!currentTvImage) return;
+            
+            if (currentTvImage.fadeDirection === 'in') {
+                // Fade in
+                currentTvImage.opacity = Math.min(1, currentTvImage.opacity + 0.05);
+                if (currentTvImage.opacity >= 1) {
+                    currentTvImage.fadeDirection = 'display';
+                    currentTvImage.displayTime = 0;
+                }
+            } else if (currentTvImage.fadeDirection === 'display') {
+                // Display for 10-15 seconds
+                currentTvImage.displayTime++;
+                if (currentTvImage.displayTime > 600) { // 10 seconds at 60fps
+                    currentTvImage.fadeDirection = 'out';
+                }
+            } else if (currentTvImage.fadeDirection === 'out') {
+                // Fade out
+                currentTvImage.opacity = Math.max(0, currentTvImage.opacity - 0.03);
+                if (currentTvImage.opacity <= 0) {
+                    currentTvImage = null; // Clear the image
+                }
             }
         }
 
@@ -1012,11 +1131,15 @@
             
             document.getElementById('chatInput').focus();
             
-            // Start polling for agent messages
-            pollingInterval = setInterval(pollAgentMessages, 2000);
+            // Start polling for agent messages and TV images
+            pollingInterval = setInterval(() => {
+                pollAgentMessages();
+                pollTvImage();
+            }, 2000);
             
-            // Initial poll
+            // Initial polls
             pollAgentMessages();
+            pollTvImage();
         };
 
         // Handle window resize
