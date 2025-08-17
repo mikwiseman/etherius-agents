@@ -42,16 +42,20 @@ async def health_check():
         "wallet": WALLET_ADDRESS[:6] + "..." + WALLET_ADDRESS[-4:]
     }
 
-# Payment verification endpoint with x402 middleware
-# This endpoint requires payment before access
-@app.post("/nft/purchase/{payment_id}")
-@require_payment(
-    price=f"${DEFAULT_PRICE}",
-    pay_to_address=WALLET_ADDRESS,
-    network=NETWORK,
-    facilitator_url=FACILITATOR_URL,
-    description="NFT Purchase Payment"
+# Apply x402 payment middleware to specific paths
+app.middleware("http")(
+    require_payment(
+        path="/nft/purchase/*",  # Protect all /nft/purchase/* endpoints
+        price=f"${DEFAULT_PRICE}",
+        pay_to_address=WALLET_ADDRESS,
+        network=NETWORK,
+        facilitator_config={"url": FACILITATOR_URL},
+        description="NFT Purchase Payment"
+    )
 )
+
+# Payment verification endpoint (protected by middleware above)
+@app.post("/nft/purchase/{payment_id}")
 async def verify_nft_purchase(payment_id: str, request: Request):
     """
     This endpoint is protected by x402 middleware.

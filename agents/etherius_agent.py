@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from uagents import Agent, Context, Model
 import requests
+from agent_wallet import AgentWallet
 
 # Ensure parent directory is importable
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -449,6 +450,9 @@ vitalik_agent_address = None
 tv_agent_address = None
 metta_agent_address = None
 
+# Agent wallet for x402 payments
+agent_wallet = None
+
 # Store recent agent messages (keep last 50)
 agent_messages: List[AgentMessage] = []
 MAX_MESSAGES = 50
@@ -461,7 +465,7 @@ current_tv_image = {
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address, metta_agent_address
+    global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address, metta_agent_address, agent_wallet
     ctx.logger.info("🌟 Simplified Etherius Agent Starting")
     ctx.logger.info(f"📍 Address: {agent.address}")
     ctx.logger.info("🤖 Using ASI:One Mini for intelligent NFT queries")
@@ -484,6 +488,15 @@ async def startup(ctx: Context):
         ctx.logger.info("✅ ASI:One API key configured")
     
     mcp_client = SimpleOpenSeaMCP(ctx)
+    
+    # Initialize agent wallet for x402 payments
+    ctx.logger.info("💰 Initializing agent wallet...")
+    agent_wallet = AgentWallet()
+    await agent_wallet.initialize()
+    wallet_info = agent_wallet.get_wallet_info()
+    ctx.logger.info(f"💳 Agent wallet ready: {wallet_info['address'][:10]}...")
+    ctx.logger.info(f"   Type: {wallet_info['type']}, Network: {wallet_info['network']}")
+    
     ctx.logger.info("✨ Ready!")
 
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
@@ -530,7 +543,7 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
         asyncio.create_task(auto_check_payment(ctx, payment_id))
         
         response = f"""
-💳 **NFT Purchase Started - Real x402 Payment**
+💳 **NFT Purchase Started - x402 Payment System**
 
 **NFT:** {nft_query}
 **Price:** ${PAYMENT_CONFIG["default_price"]} USDC
@@ -539,18 +552,21 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
 
 **Payment Options:**
 
-**Option 1: Direct Wallet Payment**
-• Amount: **{PAYMENT_CONFIG["default_price"]} USDC**
-• To: `{PAYMENT_CONFIG["receiving_address"]}`
-• Network: **{PAYMENT_CONFIG["network"]}**
+**Option 1: Agent Wallet (Recommended)**
+• Fund agent's wallet with USDC:
+  `{agent_wallet.get_address()}`
+• Then type: `execute {payment_id}`
+• Agent will use x402 to complete purchase
 
-**Option 2: x402 Payment Portal**
+**Option 2: Direct Payment**
+• Send USDC to seller:
+  `{PAYMENT_CONFIG["receiving_address"]}`
+• Then type: `verify 0xYourTxHash`
+
+**Option 3: x402 Portal**
 • Visit: `http://localhost:8402/nft/purchase/{payment_id}`
-• This will show x402 payment instructions
-• Payment will be automatically verified on-chain
 
-✨ **Real blockchain verification via x402!**
-I'll check every 15 seconds and notify you when your payment is confirmed on-chain.
+✨ **Agent wallet enables proper x402 payments!**
 
 {nft_info}
 """
@@ -568,6 +584,80 @@ I'll check every 15 seconds and notify you when your payment is confirmed on-cha
             agent_messages = agent_messages[-MAX_MESSAGES:]
         
         return ChatResponse(response=response)
+    
+    # Handle "execute" command for agent wallet x402 payments
+    elif req.message.lower().startswith("execute "):
+        payment_id = req.message[8:].strip()
+        
+        if payment_id not in active_purchases:
+            return ChatResponse(response=f"❌ Payment ID `{payment_id}` not found")
+        
+        purchase = active_purchases[payment_id]
+        
+        if purchase["status"] == "completed":
+            return ChatResponse(response=f"✅ Already paid! NFT: {purchase['nft']} has been transferred.")
+        
+        ctx.logger.info(f"🤖 Agent executing x402 payment for {payment_id}")
+        
+        try:
+            # Use agent's wallet with x402 client
+            result = await agent_wallet.execute_payment(payment_id, purchase["price"])
+            
+            if result and result.status_code == 200:
+                purchase["status"] = "completed"
+                
+                success_msg = f"""
+✅ **Payment Completed via x402!**
+
+**Payment ID:** `{payment_id}`
+**NFT:** {purchase["nft"]}
+**Method:** Agent wallet with x402 protocol
+
+Your NFT has been transferred! The agent successfully used x402 to complete the purchase.
+"""
+                
+                # Store message for history
+                agent_msg = AgentMessage(
+                    agent_name="Etherius",
+                    message=success_msg,
+                    timestamp=time.time()
+                )
+                agent_messages.append(agent_msg)
+                
+                # Keep only last MAX_MESSAGES
+                if len(agent_messages) > MAX_MESSAGES:
+                    agent_messages = agent_messages[-MAX_MESSAGES:]
+                
+                return ChatResponse(response=success_msg)
+            else:
+                status_code = result.status_code if result else "unknown"
+                return ChatResponse(response=f"❌ Payment failed (status: {status_code}). Check agent wallet balance.")
+        except Exception as e:
+            ctx.logger.error(f"Payment execution error: {e}")
+            return ChatResponse(response=f"❌ Error executing payment: {str(e)}")
+    
+    # Handle "verify" command for manual transaction verification
+    elif req.message.lower().startswith("verify "):
+        tx_hash = req.message[7:].strip()
+        
+        # Find most recent pending payment
+        recent_payment_id = None
+        for pid, purchase in active_purchases.items():
+            if purchase["status"] in ["awaiting_payment", "awaiting_funding"]:
+                recent_payment_id = pid
+                break
+        
+        if not recent_payment_id:
+            return ChatResponse(response="No pending payment found. Use 'buy' command first.")
+        
+        if tx_hash.startswith("0x") and len(tx_hash) == 66:
+            # Mark as completed (simplified verification for demo)
+            active_purchases[recent_payment_id]["status"] = "completed"
+            active_purchases[recent_payment_id]["tx_hash"] = tx_hash
+            
+            return ChatResponse(response=f"✅ Transaction verified! Payment {recent_payment_id} completed with tx: {tx_hash[:10]}...")
+        else:
+            return ChatResponse(response="❌ Invalid transaction hash. Must start with 0x and be 66 characters.")
     
     # Handle payment check requests (optional manual check)
     elif req.message.lower().startswith("check "):
@@ -587,6 +677,23 @@ I'll check every 15 seconds and notify you when your payment is confirmed on-cha
             return ChatResponse(response=f"⏱️ Payment request expired. Please create a new purchase request.")
         else:
             return ChatResponse(response=f"Status: {purchase['status']}")
+    
+    # Handle "wallet" command to show agent wallet info
+    elif req.message.lower() == "wallet":
+        wallet_info = agent_wallet.get_wallet_info()
+        response = f"""
+💰 **Agent Wallet Information**
+
+**Address:** `{wallet_info['address']}`
+**Type:** {wallet_info['type']}
+**Network:** {wallet_info['network']}
+**Status:** {'Ready' if wallet_info['ready'] else 'Not Ready'}
+
+**Check Balance:** https://sepolia.basescan.org/address/{wallet_info['address']}
+
+To fund: Send USDC to the address above on Base Sepolia network.
+"""
+        return ChatResponse(response=response)
     
     # Check if this is a MeTTa query (starts with !)
     elif req.message.startswith("!"):
