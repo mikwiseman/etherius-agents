@@ -140,57 +140,69 @@ class SimpleOpenSeaMCP:
         
         # Step 1: Use ASI:One Mini to determine the right MCP tool and arguments
         tool_prompt = f"""
-You are a tool router for OpenSea MCP. Choose exactly ONE tool and the minimal, valid arguments to satisfy the user's request.
-IMPORTANT: When searching for NFTs, collections, or items, always include parameters that will return image URLs (use includes parameters when available).
+You are a tool router for OpenSea MCP. Choose the best tool and arguments to satisfy the user's request.
 Return ONLY a JSON object with keys "tool" and "args". No markdown, no code fences, no extra text.
 
 USER QUERY:
 "{user_query}"
 
-ALLOWED TOOLS:
-- "search" — AI-powered marketplace search (requires: query)
-- "fetch" — Fetch full details for an entity by id
-- "search_collections" — Search NFT collections (requires: query)
-- "get_collection" — Get specific collection details (requires: slug; includes: activity, holders, offers, floorPrices, salesVolume, items, attributes)
-- "search_items" — Search individual NFTs (requires: query; optional: limit, chain)
-- "get_item" — Get specific NFT details (requires: contract, tokenId; includes: activity, offers, owners)
-- "search_tokens" — Search cryptocurrencies/tokens (requires: query)
-- "get_token" — includes: priceHistory, activity, ohlcv
-- "get_token_swap_quote"
-- "get_token_balances"
-- "get_token_balance"
-- "get_nft_balances"
-- "get_profile" — includes: items, collections, activity, listings, offers, balances, favorites
-- "get_top_tokens"
-- "get_trending_tokens"
-- "get_top_collections"
-- "get_trending_collections"
+AVAILABLE TOOLS:
+- "search" — General marketplace search for broad/generic NFT queries
+- "search_items" — Search specific collection NFTs with filters
+- "search_collections" — Search NFT collections
+- "get_collection" — Get specific collection details (needs: slug)
+- "get_item" — Get specific NFT details (needs: contract, tokenId)
+- "search_tokens" — Search cryptocurrencies/tokens
+- "get_token" — Get token details (needs: symbol, chain)
+- "get_token_swap_quote" — Get swap quote (needs: fromToken, toToken, amount)
+- "get_profile" — Get profile details (needs: address)
+- "get_trending_collections" — Get trending collections
+- "get_top_collections" — Get top collections
 
-ARGUMENT RULES:
-- CRITICAL: ALL search tools (search, search_collections, search_items, search_tokens) MUST have a "query" parameter!
-- REQUIRED PARAMETERS: 
-  • search, search_collections, search_items, search_tokens: MUST have "query" (extract from user's question)
-  • get_collection: MUST have "slug" parameter
-  • get_item: MUST have "contract" and "tokenId" parameters
-  • get_profile: MUST have "address" parameter
-  • get_token: MUST have "symbol" and "chain" parameters
-- Chains: normalize to one of {{ "ethereum","polygon","base","solana" }}.
-  Aliases → canonical: eth|mainnet→ethereum; matic→polygon; sol→solana.
-- Timeframes: ONE_HOUR | ONE_DAY | SEVEN_DAYS | THIRTY_DAYS.
-- get_top_collections.sortBy: FLOOR_PRICE | ONE_DAY_VOLUME | ONE_DAY_SALES | VOLUME | SALES.
-- IMPORTANT FOR NFT IMAGES: When using get_collection, get_item, or search tools, ALWAYS include "items" in the includes array to get NFT images.
-- Use only relevant args (query, slug, address, symbol, contract, tokenId, limit, chain, includes, fromToken, toToken, amount).
-- Never invent parameters. Omit null/empty values. Keep args minimal and correct.
+TOOL SELECTION RULES:
+- Use "search" for generic NFT searches without a specific collection (e.g., "cheap NFTs", "any NFTs under 1 ETH")
+- Use "search_items" ONLY when a specific collection is mentioned (e.g., "CryptoPunks", "Azuki", "Bored Apes")
+- If user says just "NFTs" or "cheap NFTs" without a collection name, use "search" not "search_items"
 
-OUTPUT (examples; adapt to the user query):
-{{"tool":"search_collections","args":{{"query":"pudgy penguins","limit":5,"chain":"ethereum"}}}}
-{{"tool":"search_items","args":{{"query":"rare trait","limit":10,"chain":"ethereum"}}}}
-{{"tool":"get_collection","args":{{"slug":"boredapeyachtclub","includes":["floorPrices","salesVolume","items"]}}}}
+CRITICAL - STRUCTURED PARAMETERS FOR search_items:
+- query: ONLY the collection/item name (e.g., "CryptoPunks", "Azuki", "Bored Apes")
+- priceRange: {{"min": number, "max": number, "currency": "ETH"}} for price filters
+- status: "listed" for items on sale, "sold" for sold items
+- limit: number of results (10-50)
+- chain: ethereum, polygon, base, solana
+- includes: ["items"] for images
+
+PARAMETER EXTRACTION RULES:
+Extract filters from natural language and use structured parameters:
+- "under X ETH" → priceRange: {{"max": X, "currency": "ETH"}}
+- "above X ETH" → priceRange: {{"min": X, "currency": "ETH"}}
+- "between X and Y ETH" → priceRange: {{"min": X, "max": Y, "currency": "ETH"}}
+- "on sale/for sale/listed/currently on sale" → status: "listed"
+- "sold" → status: "sold"
+- DO NOT put price or status words in the query field!
+
+For get_collection, include relevant data:
+- ["items", "floorPrices", "salesVolume"] for market data
+- ["items", "activity", "holders"] for collection analytics
+
+EXAMPLES (note how filters become structured parameters):
+User: "Find CryptoPunks currently on sale under 30 ETH"
+{{"tool":"search_items","args":{{"query":"CryptoPunks","priceRange":{{"max":30,"currency":"ETH"}},"status":"listed","chain":"ethereum","limit":20}}}}
+
+User: "Show me Azuki NFTs between 5 and 10 ETH"
+{{"tool":"search_items","args":{{"query":"Azuki","priceRange":{{"min":5,"max":10,"currency":"ETH"}},"status":"listed","chain":"ethereum","limit":15}}}}
+
+User: "Bored Apes for sale"
+{{"tool":"search_items","args":{{"query":"Bored Apes","status":"listed","chain":"ethereum","limit":20}}}}
+
+User: "Cheap NFTs under 0.01 ETH on Polygon"
+{{"tool":"search","args":{{"query":"cheap NFTs under 0.01 ETH","chain":"polygon","limit":30}}}}
+
+User: "Show pudgy penguins collection"
+{{"tool":"get_collection","args":{{"slug":"pudgypenguins","includes":["items","floorPrices","salesVolume"]}}}}
+
+User: "trending collections"
 {{"tool":"get_trending_collections","args":{{"timeframe":"ONE_DAY","limit":10}}}}
-{{"tool":"get_top_collections","args":{{"sortBy":"ONE_DAY_VOLUME","limit":10,"chain":"ethereum"}}}}
-{{"tool":"get_profile","args":{{"address":"vitalik.eth"}}}}
-{{"tool":"get_token","args":{{"symbol":"USDC","chain":"ethereum"}}}}
-{{"tool":"get_token_swap_quote","args":{{"fromToken":"ETH","toToken":"USDC","amount":"0.40","chain":"ethereum"}}}}
 """
 
 
@@ -205,7 +217,8 @@ OUTPUT (examples; adapt to the user query):
                 "messages": [
                     {"role": "system", "content": "You generate OpenSea MCP API requests. Respond only with valid JSON!!, no ```, no markdown or extra text."},
                     {"role": "user", "content": tool_prompt}
-                ]
+                ],
+                "temperature": 0
             }
             response = requests.post(ASI_ONE_URL, headers=headers, json=data)
             
@@ -240,17 +253,45 @@ OUTPUT (examples; adapt to the user query):
             
             self._ctx.logger.info(f"🤖 ASI:One Mini selected: {tool_name} with args: {tool_args}")
             
-            # Validate required parameters
-            search_tools = ["search", "search_collections", "search_items", "search_tokens"]
-            if tool_name in search_tools and not tool_args.get("query"):
-                # If no query provided for search, use a fallback based on context
-                self._ctx.logger.warning(f"Missing query for {tool_name}, using fallback")
-                if "nft" in user_query.lower() or "collection" in user_query.lower():
-                    tool_args["query"] = "trending nft"
-                elif "token" in user_query.lower() or "coin" in user_query.lower():
-                    tool_args["query"] = "trending tokens"
+            # Add query parameter if missing for search tools (only for general search)
+            general_search_tools = ["search", "search_collections", "search_tokens"]
+            if tool_name in general_search_tools and not tool_args.get("query"):
+                # For general search tools, use the full query
+                self._ctx.logger.info(f"No query parameter found for {tool_name}, using user's input")
+                tool_args["query"] = user_query
+            elif tool_name == "search_items" and not tool_args.get("query"):
+                # For search_items, extract just the collection/item name, not the full query with filters
+                # This is a fallback - the prompt should have extracted it properly
+                self._ctx.logger.warning(f"No query for search_items, attempting to extract collection name")
+                # Try to extract collection name from common patterns
+                import re
+                # Look for known collection names or NFT mentions
+                collection_patterns = [
+                    r'(CryptoPunks?|Punks?)',
+                    r'(Bored Apes?|BAYC)',
+                    r'(Azuki)',
+                    r'(Pudgy Penguins?)',
+                    r'(Doodles?)',
+                    r'(CloneX)',
+                    r'(Moonbirds?)',
+                    r'(NFTs?)',
+                ]
+                for pattern in collection_patterns:
+                    match = re.search(pattern, user_query, re.IGNORECASE)
+                    if match:
+                        tool_args["query"] = match.group(1)
+                        self._ctx.logger.info(f"Extracted collection name: {tool_args['query']}")
+                        break
                 else:
-                    tool_args["query"] = user_query[:50]  # Use first 50 chars of user query
+                    # If no pattern matched, use a generic term
+                    tool_args["query"] = "NFT"
+                    self._ctx.logger.warning("Could not extract collection name, using 'NFT' as fallback")
+            
+            # Always add includes for appropriate tools to get images
+            if tool_name in ["search", "search_items", "get_collection"]:
+                if "includes" not in tool_args:
+                    tool_args["includes"] = ["items"]
+                    self._ctx.logger.info(f"Added includes: ['items'] to {tool_name} for image data")
             
             # Step 2: Execute the MCP request
             mcp_result = await self._execute_mcp_call(tool_name, tool_args)
@@ -462,6 +503,21 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
         # Get NFT details using existing OpenSea MCP
         nft_info = await mcp_client.query_with_gpt(f"get details and price for {nft_query}", ctx)
         
+        # Create payment request via x402 service
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                payment_response = await client.post(
+                    "http://localhost:8402/payment/create",
+                    params={"nft_name": nft_query, "price": PAYMENT_CONFIG["default_price"]}
+                )
+                
+                if payment_response.status_code == 200:
+                    payment_data = payment_response.json()
+                    payment_id = payment_data["payment_id"]
+                    ctx.logger.info(f"Created x402 payment request: {payment_id}")
+        except Exception as e:
+            ctx.logger.error(f"Failed to create x402 payment request: {e}")
+        
         # Store purchase details
         active_purchases[payment_id] = {
             "nft": nft_query,
@@ -474,19 +530,27 @@ async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
         asyncio.create_task(auto_check_payment(ctx, payment_id))
         
         response = f"""
-💳 **NFT Purchase Started**
+💳 **NFT Purchase Started - Real x402 Payment**
 
 **NFT:** {nft_query}
 **Price:** ${PAYMENT_CONFIG["default_price"]} USDC
 **Payment ID:** `{payment_id}`
+**Network:** {PAYMENT_CONFIG["network"]}
 
-**Send payment via MetaMask:**
+**Payment Options:**
+
+**Option 1: Direct Wallet Payment**
 • Amount: **{PAYMENT_CONFIG["default_price"]} USDC**
 • To: `{PAYMENT_CONFIG["receiving_address"]}`
 • Network: **{PAYMENT_CONFIG["network"]}**
 
-✨ **I'll check automatically every 15 seconds!**
-No need to do anything after sending - I'll notify you when payment is detected.
+**Option 2: x402 Payment Portal**
+• Visit: `http://localhost:8402/nft/purchase/{payment_id}`
+• This will show x402 payment instructions
+• Payment will be automatically verified on-chain
+
+✨ **Real blockchain verification via x402!**
+I'll check every 15 seconds and notify you when your payment is confirmed on-chain.
 
 {nft_info}
 """
@@ -619,7 +683,6 @@ async def handle_agent_response(ctx: Context, sender: str, msg: BroadcastMessage
 async def get_agent_messages(ctx: Context) -> AgentMessagesResponse:
     """Get recent agent messages for frontend polling"""
     global agent_messages
-    ctx.logger.info(f"Agent messages requested, returning {len(agent_messages)} messages")
     return AgentMessagesResponse(messages=agent_messages)
 
 @agent.on_message(model=ImageUrlMessage)
@@ -743,22 +806,52 @@ To try again, send a new "buy" request.
         if len(agent_messages) > MAX_MESSAGES:
             agent_messages = agent_messages[-MAX_MESSAGES:]
 
-# Mock blockchain check (replace with real web3 in production)
+# Real x402 payment verification
 async def check_blockchain(address: str, amount: float, payment_id: str) -> Optional[str]:
     """
-    Check if payment received on blockchain
-    Returns transaction hash if found
+    Check if payment received via x402 service
+    Returns transaction hash if payment is verified
     """
-    # Mock: simulate payment found after 3 checks (45 seconds)
-    # In production: Use web3.py to check USDC transfers
-    
-    import random
-    # 30% chance per check for demo
-    if random.random() < 0.3:
-        mock_tx = f"0x{''.join([hex(random.randint(0,15))[2:] for _ in range(64)])}"
-        return mock_tx
-    
-    return None
+    try:
+        # Check payment status via x402 service
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # First check if payment has been recorded
+            status_response = await client.get(
+                f"http://localhost:8402/payment/status/{payment_id}"
+            )
+            
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                if status_data.get("status") == "completed":
+                    # Payment already verified
+                    return status_data.get("tx_hash", f"0x{payment_id}")
+            
+            # Try to verify payment through x402 protected endpoint
+            # This will return 402 if payment not made, 200 if payment verified
+            verify_response = await client.post(
+                f"http://localhost:8402/nft/purchase/{payment_id}",
+                headers={
+                    "X-Payment-Id": payment_id,
+                    "Content-Type": "application/json"
+                },
+                json={"payment_id": payment_id}
+            )
+            
+            if verify_response.status_code == 200:
+                # Payment successfully verified by x402
+                data = verify_response.json()
+                return data.get("tx_hash", f"0x{payment_id}")
+            elif verify_response.status_code == 402:
+                # Payment still required - user hasn't paid yet
+                return None
+            else:
+                # Some other error
+                return None
+                
+    except Exception as e:
+        # Log error but don't crash
+        print(f"Error checking payment {payment_id}: {e}")
+        return None
 
 # Mock NFT transfer
 async def transfer_nft(nft_name: str) -> bool:
