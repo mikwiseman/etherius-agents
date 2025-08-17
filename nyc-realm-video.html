@@ -71,7 +71,7 @@
             border-radius: 15px;
             padding: 10px 15px;
             max-width: 200px;
-            font-size: 14px;
+            font-size: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -713,8 +713,8 @@
 
         // Update character speech bubble
         function updateCharacterBubble(agentName, text) {
-            // Truncate text for bubble
-            const bubbleText = text.substring(0, 80) + (text.length > 80 ? '...' : '');
+            // Truncate text for bubble - increased limit
+            const bubbleText = text.substring(0, 200) + (text.length > 200 ? '...' : '');
             
             let x, y;
             switch(agentName.toLowerCase()) {
@@ -757,11 +757,11 @@
                     ctx.save();
                     ctx.globalAlpha = bubble.opacity;
                     
-                    // Larger font and bubble dimensions
-                    ctx.font = '16px sans-serif';
+                    // Smaller font and bubble dimensions
+                    ctx.font = '12px sans-serif';
                     
                     // Word wrap for longer text
-                    const maxWidth = 280;
+                    const maxWidth = 200;
                     const words = bubble.text.split(' ');
                     const lines = [];
                     let currentLine = '';
@@ -781,13 +781,13 @@
                     }
                     
                     // Calculate bubble dimensions based on text
-                    const lineHeight = 24;
-                    const padding = 30;  // More padding for bigger bubble
+                    const lineHeight = 18;
+                    const padding = 20;  // Reduced padding for smaller bubble
                     const bubbleHeight = lines.length * lineHeight + padding * 2;
                     const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
                     const bubbleWidth = Math.min(
-                        textWidth + padding * 3,  // More horizontal padding
-                        350  // Wider max width
+                        textWidth + padding * 2,  // Reduced horizontal padding
+                        250  // Smaller max width
                     );
                     
                     // Bubble background color based on agent
@@ -828,7 +828,7 @@
                     
                     // Draw text lines
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = '16px sans-serif';
+                    ctx.font = '12px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     

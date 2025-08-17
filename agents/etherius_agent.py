@@ -3,6 +3,8 @@ import sys
 import json
 import httpx
 import time
+import hashlib
+import asyncio
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
@@ -28,6 +30,18 @@ agent = Agent(
 # ASI:One Mini configuration
 ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
 ASI_ONE_URL = "https://api.asi1.ai/v1/chat/completions"
+
+# Payment configuration for NFT purchases
+PAYMENT_CONFIG = {
+    "receiving_address": os.getenv("X402_WALLET_ADDRESS"),
+    "network": "base-sepolia",
+    "default_price": 0.01,  # USDC
+    "auto_check_interval": 15,  # seconds
+    "max_check_time": 300  # 5 minutes max
+}
+
+# Track active NFT purchases
+active_purchases = {}
 
 # Simple Models
 class ChatRequest(Model):
@@ -134,13 +148,13 @@ USER QUERY:
 "{user_query}"
 
 ALLOWED TOOLS:
-- "search" — AI-powered marketplace search
+- "search" — AI-powered marketplace search (requires: query)
 - "fetch" — Fetch full details for an entity by id
-- "search_collections"
-- "get_collection" — includes: activity, holders, offers, floorPrices, salesVolume, items, attributes
-- "search_items"
-- "get_item" — includes: activity, offers, owners
-- "search_tokens"
+- "search_collections" — Search NFT collections (requires: query)
+- "get_collection" — Get specific collection details (requires: slug; includes: activity, holders, offers, floorPrices, salesVolume, items, attributes)
+- "search_items" — Search individual NFTs (requires: query; optional: limit, chain)
+- "get_item" — Get specific NFT details (requires: contract, tokenId; includes: activity, offers, owners)
+- "search_tokens" — Search cryptocurrencies/tokens (requires: query)
 - "get_token" — includes: priceHistory, activity, ohlcv
 - "get_token_swap_quote"
 - "get_token_balances"
@@ -153,6 +167,13 @@ ALLOWED TOOLS:
 - "get_trending_collections"
 
 ARGUMENT RULES:
+- CRITICAL: ALL search tools (search, search_collections, search_items, search_tokens) MUST have a "query" parameter!
+- REQUIRED PARAMETERS: 
+  • search, search_collections, search_items, search_tokens: MUST have "query" (extract from user's question)
+  • get_collection: MUST have "slug" parameter
+  • get_item: MUST have "contract" and "tokenId" parameters
+  • get_profile: MUST have "address" parameter
+  • get_token: MUST have "symbol" and "chain" parameters
 - Chains: normalize to one of {{ "ethereum","polygon","base","solana" }}.
   Aliases → canonical: eth|mainnet→ethereum; matic→polygon; sol→solana.
 - Timeframes: ONE_HOUR | ONE_DAY | SEVEN_DAYS | THIRTY_DAYS.
@@ -163,6 +184,7 @@ ARGUMENT RULES:
 
 OUTPUT (examples; adapt to the user query):
 {{"tool":"search_collections","args":{{"query":"pudgy penguins","limit":5,"chain":"ethereum"}}}}
+{{"tool":"search_items","args":{{"query":"rare trait","limit":10,"chain":"ethereum"}}}}
 {{"tool":"get_collection","args":{{"slug":"boredapeyachtclub","includes":["floorPrices","salesVolume","items"]}}}}
 {{"tool":"get_trending_collections","args":{{"timeframe":"ONE_DAY","limit":10}}}}
 {{"tool":"get_top_collections","args":{{"sortBy":"ONE_DAY_VOLUME","limit":10,"chain":"ethereum"}}}}
@@ -217,6 +239,18 @@ OUTPUT (examples; adapt to the user query):
                 tool_args["sortBy"] = tool_args.pop("sort_by")
             
             self._ctx.logger.info(f"🤖 ASI:One Mini selected: {tool_name} with args: {tool_args}")
+            
+            # Validate required parameters
+            search_tools = ["search", "search_collections", "search_items", "search_tokens"]
+            if tool_name in search_tools and not tool_args.get("query"):
+                # If no query provided for search, use a fallback based on context
+                self._ctx.logger.warning(f"Missing query for {tool_name}, using fallback")
+                if "nft" in user_query.lower() or "collection" in user_query.lower():
+                    tool_args["query"] = "trending nft"
+                elif "token" in user_query.lower() or "coin" in user_query.lower():
+                    tool_args["query"] = "trending tokens"
+                else:
+                    tool_args["query"] = user_query[:50]  # Use first 50 chars of user query
             
             # Step 2: Execute the MCP request
             mcp_result = await self._execute_mcp_call(tool_name, tool_args)
@@ -413,12 +447,85 @@ async def startup(ctx: Context):
 
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
 async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
-    """Chat endpoint that routes MeTTa queries or uses ASI:One Mini for OpenSea queries"""
-    global agent_messages
+    """Chat endpoint that routes MeTTa queries, handles NFT purchases, or uses ASI:One Mini for OpenSea queries"""
+    global agent_messages, active_purchases
     ctx.logger.info(f"💬 Chat: {req.message}")
     
+    # Handle buy requests for NFT purchases
+    if req.message.lower().startswith("buy "):
+        nft_query = req.message[4:].strip()
+        ctx.logger.info(f"🛒 NFT purchase request: {nft_query}")
+        
+        # Generate unique payment ID
+        payment_id = hashlib.sha256(f"{nft_query}{time.time()}".encode()).hexdigest()[:8]
+        
+        # Get NFT details using existing OpenSea MCP
+        nft_info = await mcp_client.query_with_gpt(f"get details and price for {nft_query}", ctx)
+        
+        # Store purchase details
+        active_purchases[payment_id] = {
+            "nft": nft_query,
+            "price": PAYMENT_CONFIG["default_price"],
+            "start_time": time.time(),
+            "status": "awaiting_payment"
+        }
+        
+        # Start auto-checker immediately
+        asyncio.create_task(auto_check_payment(ctx, payment_id))
+        
+        response = f"""
+💳 **NFT Purchase Started**
+
+**NFT:** {nft_query}
+**Price:** ${PAYMENT_CONFIG["default_price"]} USDC
+**Payment ID:** `{payment_id}`
+
+**Send payment via MetaMask:**
+• Amount: **{PAYMENT_CONFIG["default_price"]} USDC**
+• To: `{PAYMENT_CONFIG["receiving_address"]}`
+• Network: **{PAYMENT_CONFIG["network"]}**
+
+✨ **I'll check automatically every 15 seconds!**
+No need to do anything after sending - I'll notify you when payment is detected.
+
+{nft_info}
+"""
+        
+        # Store and return response
+        agent_msg = AgentMessage(
+            agent_name="Etherius",
+            message=response,
+            timestamp=time.time()
+        )
+        agent_messages.append(agent_msg)
+        
+        # Keep only last MAX_MESSAGES
+        if len(agent_messages) > MAX_MESSAGES:
+            agent_messages = agent_messages[-MAX_MESSAGES:]
+        
+        return ChatResponse(response=response)
+    
+    # Handle payment check requests (optional manual check)
+    elif req.message.lower().startswith("check "):
+        payment_id = req.message[6:].strip()
+        
+        if payment_id not in active_purchases:
+            return ChatResponse(response=f"❌ Payment ID `{payment_id}` not found")
+        
+        purchase = active_purchases[payment_id]
+        
+        if purchase["status"] == "completed":
+            return ChatResponse(response=f"✅ Payment already confirmed! NFT: {purchase['nft']} has been transferred.")
+        elif purchase["status"] == "awaiting_payment":
+            elapsed = int(time.time() - purchase["start_time"])
+            return ChatResponse(response=f"⏳ Still checking for payment... Auto-check running every 15 seconds. ({elapsed}s elapsed)")
+        elif purchase["status"] == "expired":
+            return ChatResponse(response=f"⏱️ Payment request expired. Please create a new purchase request.")
+        else:
+            return ChatResponse(response=f"Status: {purchase['status']}")
+    
     # Check if this is a MeTTa query (starts with !)
-    if req.message.startswith("!"):
+    elif req.message.startswith("!"):
         ctx.logger.info("🧠 Detected MeTTa query, routing to MeTTa agent...")
         
         if metta_agent_address:
@@ -541,6 +648,123 @@ async def get_tv_image(ctx: Context) -> TvImageResponse:
 async def health_check(ctx: Context) -> ChatResponse:
     ctx.logger.info("Health check requested")
     return ChatResponse(response="Simplified Etherius agent is healthy!")
+
+# Auto-check payment function
+async def auto_check_payment(ctx: Context, payment_id: str):
+    """Automatically check for payment every 15 seconds"""
+    global active_purchases, agent_messages
+    
+    if payment_id not in active_purchases:
+        return
+    
+    purchase = active_purchases[payment_id]
+    end_time = purchase["start_time"] + PAYMENT_CONFIG["max_check_time"]
+    check_count = 0
+    
+    ctx.logger.info(f"🔄 Starting auto-check for payment {payment_id}")
+    
+    while time.time() < end_time:
+        check_count += 1
+        
+        # Wait before checking
+        await asyncio.sleep(PAYMENT_CONFIG["auto_check_interval"])
+        
+        # Check if purchase still active
+        if payment_id not in active_purchases:
+            break
+        if purchase["status"] != "awaiting_payment":
+            break
+        
+        ctx.logger.info(f"🔍 Auto-check #{check_count} for {payment_id}")
+        
+        # Check blockchain (mock for now)
+        payment_found = await check_blockchain(
+            PAYMENT_CONFIG["receiving_address"],
+            purchase["price"],
+            payment_id
+        )
+        
+        if payment_found:
+            # Payment detected!
+            ctx.logger.info(f"✅ Payment detected for {payment_id}!")
+            
+            purchase["status"] = "completed"
+            purchase["tx_hash"] = payment_found  # tx hash from blockchain
+            
+            # Notify user immediately
+            success_message = f"""
+🎉 **Payment Automatically Detected!**
+
+**Payment ID:** `{payment_id}`
+**NFT:** {purchase["nft"]}
+**Transaction:** `{purchase["tx_hash"]}`
+
+✅ Your NFT has been transferred to your wallet!
+
+Thank you for your purchase!
+"""
+            
+            # Add to messages for user to see
+            agent_messages.append(AgentMessage(
+                agent_name="Etherius",
+                message=success_message,
+                timestamp=time.time()
+            ))
+            
+            # Keep only last MAX_MESSAGES
+            if len(agent_messages) > MAX_MESSAGES:
+                agent_messages = agent_messages[-MAX_MESSAGES:]
+            
+            # Transfer NFT (mock)
+            await transfer_nft(purchase["nft"])
+            
+            break
+    
+    # Timeout reached
+    if purchase["status"] == "awaiting_payment":
+        purchase["status"] = "expired"
+        ctx.logger.info(f"⏱️ Payment {payment_id} expired after 5 minutes")
+        
+        timeout_message = f"""
+⏱️ **Payment Window Expired**
+
+Payment ID `{payment_id}` has expired after 5 minutes.
+If you already sent payment, please contact support.
+To try again, send a new "buy" request.
+"""
+        
+        agent_messages.append(AgentMessage(
+            agent_name="Etherius",
+            message=timeout_message,
+            timestamp=time.time()
+        ))
+        
+        # Keep only last MAX_MESSAGES
+        if len(agent_messages) > MAX_MESSAGES:
+            agent_messages = agent_messages[-MAX_MESSAGES:]
+
+# Mock blockchain check (replace with real web3 in production)
+async def check_blockchain(address: str, amount: float, payment_id: str) -> Optional[str]:
+    """
+    Check if payment received on blockchain
+    Returns transaction hash if found
+    """
+    # Mock: simulate payment found after 3 checks (45 seconds)
+    # In production: Use web3.py to check USDC transfers
+    
+    import random
+    # 30% chance per check for demo
+    if random.random() < 0.3:
+        mock_tx = f"0x{''.join([hex(random.randint(0,15))[2:] for _ in range(64)])}"
+        return mock_tx
+    
+    return None
+
+# Mock NFT transfer
+async def transfer_nft(nft_name: str) -> bool:
+    """Transfer NFT to buyer (mock)"""
+    # In production: Execute actual NFT contract transfer
+    return True
 
 if __name__ == "__main__":
     print("""
