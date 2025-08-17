@@ -56,6 +56,9 @@ class TvImageResponse(Model):
     image_url: str
     timestamp: float
 
+class MettaQueryRequest(Model):
+    query: str
+
 
 class SimpleOpenSeaMCP:
     """Minimal MCP client that uses GPT-4o for request/response handling"""
@@ -369,6 +372,7 @@ mcp_client: Optional[SimpleOpenSeaMCP] = None
 katrik_agent_address = None
 vitalik_agent_address = None
 tv_agent_address = None
+metta_agent_address = None
 
 # Store recent agent messages (keep last 50)
 agent_messages: List[AgentMessage] = []
@@ -382,7 +386,7 @@ current_tv_image = {
 
 @agent.on_event("startup")
 async def startup(ctx: Context):
-    global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address
+    global mcp_client, katrik_agent_address, vitalik_agent_address, tv_agent_address, metta_agent_address
     ctx.logger.info("🌟 Simplified Etherius Agent Starting")
     ctx.logger.info(f"📍 Address: {agent.address}")
     ctx.logger.info("🤖 Using ASI:One Mini for intelligent NFT queries")
@@ -391,10 +395,12 @@ async def startup(ctx: Context):
     katrik_agent_address = "agent1qw5tlakv4cqc8jztkksfz5rlkld74v0dcnkl46tcuvyrxwk9s6dzwryk9lf"
     vitalik_agent_address = "agent1qwel00zmglnll707lhle9nvnsntqcmahvya5wsa0vyd42sy26sz0wxqp2vs"
     tv_agent_address = "agent1qgydk7m0ghhcf0l6kme7enwlkxswvzlcwqg8epwaexs259re94cdg07kzr2"
+    metta_agent_address = "agent1q0qs49vxucg494w3m3405uay4fjyf40q8mr9k73wftgnjqg2zukuwyx33jp"  # MeTTa agent address
     
     ctx.logger.info(f"📡 Will broadcast to Katrik: {katrik_agent_address}")
     ctx.logger.info(f"📡 Will broadcast to Vitalik: {vitalik_agent_address}")
     ctx.logger.info(f"📡 Will broadcast to TV: {tv_agent_address}")
+    ctx.logger.info(f"🧠 Will send MeTTa queries to: {metta_agent_address}")
     
     # Check if API key is configured
     if not ASI_ONE_API_KEY:
@@ -407,11 +413,36 @@ async def startup(ctx: Context):
 
 @agent.on_rest_post("/chat", ChatRequest, ChatResponse)
 async def chat_endpoint(ctx: Context, req: ChatRequest) -> ChatResponse:
-    """Chat endpoint that uses ASI:One Mini to handle all OpenSea queries and broadcasts to other agents"""
+    """Chat endpoint that routes MeTTa queries or uses ASI:One Mini for OpenSea queries"""
     global agent_messages
     ctx.logger.info(f"💬 Chat: {req.message}")
     
-    # Broadcast the message to all three agents
+    # Check if this is a MeTTa query (starts with !)
+    if req.message.startswith("!"):
+        ctx.logger.info("🧠 Detected MeTTa query, routing to MeTTa agent...")
+        
+        if metta_agent_address:
+            # Remove the ! prefix and send to MeTTa agent
+            metta_request = MettaQueryRequest(query=req.message[1:])
+            await ctx.send(metta_agent_address, metta_request)
+            
+            # Store a placeholder message
+            agent_msg = AgentMessage(
+                agent_name="Etherius",
+                message="Processing MeTTa query...",
+                timestamp=time.time()
+            )
+            agent_messages.append(agent_msg)
+            
+            # Keep only last MAX_MESSAGES
+            if len(agent_messages) > MAX_MESSAGES:
+                agent_messages = agent_messages[-MAX_MESSAGES:]
+            
+            return ChatResponse(response="MeTTa query sent for processing. Results will appear shortly.")
+        else:
+            return ChatResponse(response="MeTTa agent not configured. Please ensure MeTTa agent is running.")
+    
+    # For non-MeTTa queries, broadcast to all agents as before
     if katrik_agent_address and vitalik_agent_address and tv_agent_address:
         broadcast_msg = BroadcastMessage(
             message=req.message,
@@ -462,6 +493,8 @@ async def handle_agent_response(ctx: Context, sender: str, msg: BroadcastMessage
         agent_name = "Vitalik"
     elif sender == tv_agent_address:
         agent_name = "TV"
+    elif sender == metta_agent_address:
+        agent_name = "MeTTa"
     
     # Store the agent's response
     agent_msg = AgentMessage(
